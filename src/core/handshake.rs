@@ -219,7 +219,7 @@ pub fn extract_eapol_from_packet(data: &[u8]) -> Option<EapolPacket> {
     let llc_data = &ieee80211_data[header_len..];
 
     // Check for EAPOL (LLC: AA AA 03 00 00 00 88 8E)
-    if llc_data.len() < 8 || &llc_data[0..8] != &[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8E] {
+    if llc_data.len() < 8 || llc_data[0..8] != [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8E] {
         return None;
     }
 
@@ -299,17 +299,13 @@ pub fn extract_eapol_from_packet(data: &[u8]) -> Option<EapolPacket> {
     let mut mic: Option<Vec<u8>> = None;
 
     // ANonce at offset 17 (for M1 and M3)
-    if message_type == 1 || message_type == 3 {
-        if eapol_data.len() >= 49 {
-            anonce = Some(eapol_data[17..49].try_into().ok()?);
-        }
+    if (message_type == 1 || message_type == 3) && eapol_data.len() >= 49 {
+        anonce = Some(eapol_data[17..49].try_into().ok()?);
     }
 
     // SNonce at offset 17 (for M2)
-    if message_type == 2 {
-        if eapol_data.len() >= 49 {
-            snonce = Some(eapol_data[17..49].try_into().ok()?);
-        }
+    if message_type == 2 && eapol_data.len() >= 49 {
+        snonce = Some(eapol_data[17..49].try_into().ok()?);
     }
 
     // MIC at offset 81 (16 bytes) - present in M2, M3, M4
@@ -372,8 +368,8 @@ fn build_handshake_from_eapol(
             let mut eapol_frame = m2.eapol_data.clone();
             if eapol_frame.len() >= 97 {
                 // Zero out MIC field (offset 81, length 16)
-                for i in 81..97 {
-                    eapol_frame[i] = 0;
+                for item in eapol_frame.iter_mut().take(97).skip(81) {
+                    *item = 0;
                 }
             }
 

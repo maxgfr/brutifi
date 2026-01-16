@@ -220,6 +220,7 @@ pub fn calculate_mic(kck: &[u8; 16], eapol_frame: &[u8], key_version: u8) -> [u8
 ///
 /// Supports WPA (MD5), WPA2 (SHA1), and WPA2-SHA256/WPA3 (SHA256/CMAC)
 #[inline(always)]
+#[allow(clippy::too_many_arguments)]
 pub fn verify_password(
     password: &str,
     ssid: &str,

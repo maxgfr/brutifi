@@ -13,7 +13,10 @@ use iced::{Element, Length, Subscription, Task, Theme};
 
 use crate::screens::{CaptureScreen, CrackMethod, CrackScreen, HandshakeProgress, ScanScreen};
 use crate::theme::colors;
-use crate::workers::{self, CrackState, NumericCrackParams, ScanResult, WordlistCrackParams};
+use crate::workers::{
+    self, CaptureParams, CaptureState, CrackState, NumericCrackParams, ScanResult,
+    WordlistCrackParams,
+};
 
 /// Application screens
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -73,6 +76,8 @@ pub struct BruteforceApp {
     crack_screen: CrackScreen,
     interface: String,
     is_root: bool,
+    capture_state: Option<Arc<CaptureState>>,
+    capture_progress_rx: Option<tokio::sync::mpsc::UnboundedReceiver<workers::CaptureProgress>>,
     crack_state: Option<Arc<CrackState>>,
     crack_progress_rx: Option<tokio::sync::mpsc::UnboundedReceiver<workers::CrackProgress>>,
 }
@@ -87,6 +92,8 @@ impl BruteforceApp {
                 crack_screen: CrackScreen::default(),
                 interface: "en0".to_string(),
                 is_root,
+                capture_state: None,
+                capture_progress_rx: None,
                 crack_state: None,
                 crack_progress_rx: None,
             },
@@ -99,9 +106,9 @@ impl BruteforceApp {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        // Poll for crack progress updates
+        // Poll for capture and crack progress updates
         // Reduced from 100ms to 50ms for more responsive UI while maintaining performance
-        if self.crack_progress_rx.is_some() {
+        if self.capture_progress_rx.is_some() || self.crack_progress_rx.is_some() {
             time::every(std::time::Duration::from_millis(50)).map(|_| Message::Tick)
         } else {
             Subscription::none()
@@ -198,20 +205,47 @@ impl BruteforceApp {
                 Task::none()
             }
             Message::StartCapture => {
-                if let Some(ref _network) = self.capture_screen.target_network {
+                if let Some(ref network) = self.capture_screen.target_network {
+                    // Check if running as root
+                    if !self.is_root {
+                        self.capture_screen.error_message = Some(
+                            "Capture requires root privileges. Run with: sudo ./target/release/bruteforce-wifi".to_string()
+                        );
+                        return Task::none();
+                    }
+
                     self.capture_screen.is_capturing = true;
                     self.capture_screen.error_message = None;
                     self.capture_screen.packets_captured = 0;
                     self.capture_screen.handshake_progress = HandshakeProgress::default();
 
-                    // For now, simulate since real capture needs root
-                    Task::perform(
-                        async move {
-                            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                            workers::CaptureProgress::Error(
-                                "Real capture requires running as root with: sudo bruteforce-wifi capture".to_string()
-                            )
+                    let state = Arc::new(CaptureState::new());
+                    self.capture_state = Some(state.clone());
+
+                    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+                    self.capture_progress_rx = Some(rx);
+
+                    // Parse channel from network
+                    let channel = network
+                        .channel
+                        .split(',')
+                        .next()
+                        .and_then(|ch| ch.trim().parse::<u32>().ok());
+
+                    let params = CaptureParams {
+                        interface: self.interface.clone(),
+                        channel,
+                        ssid: Some(network.ssid.clone()),
+                        bssid: if !network.bssid.is_empty() {
+                            Some(network.bssid.clone())
+                        } else {
+                            None
                         },
+                        output_file: self.capture_screen.output_file.clone(),
+                    };
+
+                    Task::perform(
+                        workers::capture_async(params, state, tx),
                         Message::CaptureProgress,
                     )
                 } else {
@@ -221,7 +255,11 @@ impl BruteforceApp {
                 }
             }
             Message::StopCapture => {
+                if let Some(ref state) = self.capture_state {
+                    state.stop();
+                }
                 self.capture_screen.is_capturing = false;
+                self.capture_progress_rx = None;
                 Task::none()
             }
             Message::CaptureProgress(progress) => {
@@ -333,9 +371,56 @@ impl BruteforceApp {
                 Task::none()
             }
             Message::StartCrack => {
+                // Validate handshake file exists
+                let handshake_path = PathBuf::from(&self.crack_screen.handshake_path);
+                if !handshake_path.exists() {
+                    self.crack_screen.error_message = Some(format!(
+                        "Handshake file not found: {}",
+                        self.crack_screen.handshake_path
+                    ));
+                    return Task::none();
+                }
+
+                // Validate wordlist file exists for wordlist method
+                if self.crack_screen.method == CrackMethod::Wordlist {
+                    let wordlist_path = PathBuf::from(&self.crack_screen.wordlist_path);
+                    if !wordlist_path.exists() {
+                        self.crack_screen.error_message = Some(format!(
+                            "Wordlist file not found: {}",
+                            self.crack_screen.wordlist_path
+                        ));
+                        return Task::none();
+                    }
+                }
+
+                // Validate numeric range for numeric method
+                if self.crack_screen.method == CrackMethod::Numeric {
+                    let min_digits = self.crack_screen.min_digits.parse::<usize>().unwrap_or(8);
+                    let max_digits = self.crack_screen.max_digits.parse::<usize>().unwrap_or(8);
+
+                    if !(8..=63).contains(&min_digits) {
+                        self.crack_screen.error_message =
+                            Some("Min digits must be between 8 and 63".to_string());
+                        return Task::none();
+                    }
+
+                    if !(8..=63).contains(&max_digits) {
+                        self.crack_screen.error_message =
+                            Some("Max digits must be between 8 and 63".to_string());
+                        return Task::none();
+                    }
+
+                    if min_digits > max_digits {
+                        self.crack_screen.error_message =
+                            Some("Min digits cannot be greater than max digits".to_string());
+                        return Task::none();
+                    }
+                }
+
                 self.crack_screen.is_cracking = true;
                 self.crack_screen.error_message = None;
                 self.crack_screen.found_password = None;
+                self.crack_screen.password_not_found = false;
                 self.crack_screen.current_attempts = 0;
                 self.crack_screen.progress = 0.0;
                 self.crack_screen.status_message = "Starting...".to_string();
@@ -350,7 +435,7 @@ impl BruteforceApp {
                 match self.crack_screen.method {
                     CrackMethod::Numeric => {
                         let params = NumericCrackParams {
-                            handshake_path: PathBuf::from(&self.crack_screen.handshake_path),
+                            handshake_path,
                             ssid: if self.crack_screen.ssid.is_empty() {
                                 None
                             } else {
@@ -375,7 +460,7 @@ impl BruteforceApp {
                     }
                     CrackMethod::Wordlist => {
                         let params = WordlistCrackParams {
-                            handshake_path: PathBuf::from(&self.crack_screen.handshake_path),
+                            handshake_path,
                             ssid: if self.crack_screen.ssid.is_empty() {
                                 None
                             } else {
@@ -438,6 +523,7 @@ impl BruteforceApp {
                     workers::CrackProgress::NotFound => {
                         self.crack_screen.status_message = "Password not found".to_string();
                         self.crack_screen.progress = 1.0;
+                        self.crack_screen.password_not_found = true;
                         self.crack_screen.is_cracking = false;
                         self.crack_progress_rx = None;
                     }
@@ -455,15 +541,24 @@ impl BruteforceApp {
                 Task::none()
             }
             Message::Tick => {
+                let mut messages = Vec::new();
+
+                // Poll for capture progress
+                if let Some(ref mut rx) = self.capture_progress_rx {
+                    while let Ok(progress) = rx.try_recv() {
+                        messages.push(Message::CaptureProgress(progress));
+                    }
+                }
+
                 // Poll for crack progress
                 if let Some(ref mut rx) = self.crack_progress_rx {
-                    let mut messages = Vec::new();
                     while let Ok(progress) = rx.try_recv() {
                         messages.push(Message::CrackProgress(progress));
                     }
-                    if !messages.is_empty() {
-                        return Task::batch(messages.into_iter().map(|m| Task::done(m)));
-                    }
+                }
+
+                if !messages.is_empty() {
+                    return Task::batch(messages.into_iter().map(Task::done));
                 }
                 Task::none()
             }

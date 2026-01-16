@@ -71,7 +71,9 @@ impl CaptureScreen {
         let network_selector = if self.available_networks.is_empty() {
             container(
                 column![
-                    text("No networks available").size(14).color(colors::TEXT_DIM),
+                    text("No networks available")
+                        .size(14)
+                        .color(colors::TEXT_DIM),
                     text("Please go back to Scan screen and scan for networks first")
                         .size(12)
                         .color(colors::WARNING),
@@ -93,23 +95,17 @@ impl CaptureScreen {
             ]
             .spacing(6);
 
-            let network_details = if let Some(ref network) = self.target_network {
-                Some(
-                    column![
-                        row![
-                            text("BSSID: ").size(12).color(colors::TEXT_DIM),
-                            text(&network.bssid).size(12).color(colors::TEXT),
-                            text(" | Channel: ").size(12).color(colors::TEXT_DIM),
-                            text(&network.channel).size(12).color(colors::TEXT),
-                            text(" | Security: ").size(12).color(colors::TEXT_DIM),
-                            text(&network.security).size(12).color(colors::PRIMARY),
-                        ],
-                    ]
-                    .spacing(6),
-                )
-            } else {
-                None
-            };
+            let network_details = self.target_network.as_ref().map(|network| {
+                column![row![
+                    text("BSSID: ").size(12).color(colors::TEXT_DIM),
+                    text(&network.bssid).size(12).color(colors::TEXT),
+                    text(" | Channel: ").size(12).color(colors::TEXT_DIM),
+                    text(&network.channel).size(12).color(colors::TEXT),
+                    text(" | Security: ").size(12).color(colors::TEXT_DIM),
+                    text(&network.security).size(12).color(colors::PRIMARY),
+                ],]
+                .spacing(6)
+            });
 
             let mut content = column![picker].spacing(10);
             if let Some(details) = network_details {
@@ -120,10 +116,11 @@ impl CaptureScreen {
         };
 
         // macOS Warning
-        let macos_warning =
-            container(
-                column![
-                text("macOS Capture Instructions").size(14).color(colors::WARNING),
+        let macos_warning = container(
+            column![
+                text("macOS Capture Instructions")
+                    .size(14)
+                    .color(colors::WARNING),
                 text("Apple Silicon does NOT support packet injection (deauth attacks).")
                     .size(12)
                     .color(colors::TEXT_DIM),
@@ -146,20 +143,20 @@ impl CaptureScreen {
                     .size(11)
                     .color(colors::SUCCESS),
             ]
-                .spacing(2)
-                .padding(12),
-            )
-            .style(|_| container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.95, 0.77, 0.06, 0.1,
-                ))),
-                border: iced::Border {
-                    color: colors::WARNING,
-                    width: 1.0,
-                    radius: 6.0.into(),
-                },
-                ..Default::default()
-            });
+            .spacing(2)
+            .padding(12),
+        )
+        .style(|_| container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                0.95, 0.77, 0.06, 0.1,
+            ))),
+            border: iced::Border {
+                color: colors::WARNING,
+                width: 1.0,
+                radius: 6.0.into(),
+            },
+            ..Default::default()
+        });
 
         // Handshake progress
         let handshake_status = {

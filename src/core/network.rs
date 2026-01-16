@@ -1,3 +1,5 @@
+#![allow(clippy::print_literal)]
+
 use crate::core::handshake::extract_eapol_from_packet;
 use anyhow::{anyhow, Context, Result};
 use pcap::Capture;
@@ -75,8 +77,9 @@ pub fn compact_duplicate_networks(networks: Vec<WifiNetwork>) -> Vec<WifiNetwork
 
     // Group networks by SSID
     for network in networks {
-        ssid_map.entry(network.ssid.clone())
-            .or_insert_with(Vec::new)
+        ssid_map
+            .entry(network.ssid.clone())
+            .or_default()
             .push(network);
     }
 
@@ -135,6 +138,9 @@ pub fn compact_duplicate_networks(networks: Vec<WifiNetwork>) -> Vec<WifiNetwork
 pub fn scan_networks(interface: &str) -> Result<Vec<WifiNetwork>> {
     println!("{} Scanning for networks...", "[*]");
 
+    // Note: We DON'T disconnect WiFi for a simple scan
+    // (disconnection is only needed for packet capture to improve reliability)
+
     // MAC OS implementation
     // try to use native airport first, then fallback to swift script if airport is missing
     // Actually, we found airport is missing on this system.
@@ -189,11 +195,8 @@ pub fn scan_networks(interface: &str) -> Result<Vec<WifiNetwork>> {
             println!("{}", "  4. Run this scan again (without sudo)");
             println!();
             println!(
-                "{}",
-                format!(
-                    "📖 Full guide: {}/MACOS_SETUP.md",
-                    env!("CARGO_MANIFEST_DIR")
-                )
+                "📖 Full guide: {}/MACOS_SETUP.md",
+                env!("CARGO_MANIFEST_DIR")
             );
             println!();
             println!("{}", "⚠️  Returning partial scan results (no BSSIDs)...");
@@ -310,21 +313,64 @@ fn check_wifi_connected() -> Option<String> {
     None
 }
 
+/// Disconnect from WiFi on macOS
+pub fn disconnect_wifi() -> Result<()> {
+    use std::io::Write;
+
+    println!("{}", "🔌 Disconnecting from WiFi...");
+
+    // Use Swift to disconnect using CoreWLAN
+    let script_content = r#"
+import CoreWLAN
+
+let client = CWWiFiClient.shared()
+if let interface = client.interface() {
+    interface.disassociate()
+    print("Disconnected")
+} else {
+    print("No interface")
+    exit(1)
+}
+"#;
+
+    let script_path = "/tmp/wifi_disconnect.swift";
+    let mut file = std::fs::File::create(script_path)?;
+    file.write_all(script_content.as_bytes())?;
+
+    let output = Command::new("swift").arg(script_path).output()?;
+
+    if output.status.success() {
+        println!("{}", "✓ WiFi disconnected");
+        Ok(())
+    } else {
+        Err(anyhow!("Failed to disconnect WiFi"))
+    }
+}
+
+/// Parameters for traffic capture
+pub struct CaptureOptions<'a> {
+    pub interface: &'a str,
+    pub channel: Option<u32>,
+    pub ssid: Option<&'a str>,
+    pub bssid: Option<&'a str>,
+    pub output_file: &'a str,
+    pub duration: Option<u64>,
+    pub no_deauth: bool,
+}
+
 /// Capture traffic to a file
 ///
 /// If `ssid` or `bssid` is provided, it attempts to:
 /// 1. Find the BSSID (AP MAC) from Beacon/ProbeResponse frames
 /// 2. Send deauthentication frames to connected clients to force a handshake (if not disabled)
-pub fn capture_traffic(
-    interface: &str,
-    channel: Option<u32>,
-    ssid: Option<&str>,
-    bssid: Option<&str>,
-    output_file: &str,
-    duration: Option<u64>,
-    _verbose: bool,
-    no_deauth: bool,
-) -> Result<()> {
+pub fn capture_traffic(options: CaptureOptions) -> Result<()> {
+    let interface = options.interface;
+    let channel = options.channel;
+    let ssid = options.ssid;
+    let bssid = options.bssid;
+    let output_file = options.output_file;
+    let duration = options.duration;
+    let no_deauth = options.no_deauth;
     println!("{}", "📡 Starting packet capture...");
     println!("Interface: {}", interface);
     println!("Output: {}", output_file);
@@ -361,19 +407,26 @@ pub fn capture_traffic(
     }
 
     // ========================================================================
-    // Check if WiFi is connected - warn user that they should disconnect
+    // Check if WiFi is connected - auto-disconnect for better capture
     // ========================================================================
     if let Some(connected_ssid) = check_wifi_connected() {
         println!();
-        println!("{}", "⚠️  WARNING: Your WiFi is currently connected!");
-        println!("{}", format!("   Connected to: '{}'", connected_ssid));
-        println!("{}", "   Monitor mode may not work properly.");
-        println!("{}", "   💡 Tip: Disconnect from WiFi before capturing.");
-        println!("{}", "   On macOS: Option+Click WiFi icon → Disconnect");
-        println!();
+        println!("📡 Connected to: '{}'", connected_ssid);
+        println!("   Auto-disconnecting for better capture...");
 
-        // Wait 2 seconds to let user read the warning
-        std::thread::sleep(Duration::from_secs(2));
+        // Auto-disconnect
+        if let Ok(()) = disconnect_wifi() {
+            std::thread::sleep(Duration::from_secs(1));
+            println!("{}", "   ✓ Disconnected successfully");
+        } else {
+            println!("{}", "   ⚠️  Could not auto-disconnect");
+            println!(
+                "{}",
+                "   💡 Manually disconnect: Option+Click WiFi icon → Disconnect"
+            );
+            std::thread::sleep(Duration::from_secs(2));
+        }
+        println!();
     }
 
     // ========================================================================
@@ -383,39 +436,27 @@ pub fn capture_traffic(
 
     let mut channels_to_scan = Vec::new();
 
-    if channel.is_none() {
-        if let Some(target_ssid) = ssid {
-            println!(
-                "{}",
-                "🔍 Scanning for all channels (Smart Connect support)..."
-            );
-            println!("{}", "   (Scanning BEFORE enabling monitor mode)");
+    if let Some(target_ssid) = ssid {
+        if channel.is_none() {
+            println!("🔍 Scanning for all channels (Smart Connect support)...");
+            println!("   (Scanning BEFORE enabling monitor mode)");
 
             // Perform scan while interface is still in managed mode
             let networks = detect_all_channels_for_ssid(target_ssid);
 
             if networks.is_empty() {
                 println!(
-                    "{}",
-                    format!(
-                        "⚠️  Could not detect '{}'. Will scan ALL channels.",
-                        target_ssid
-                    )
+                    "⚠️  Could not detect '{}'. Will scan ALL channels.",
+                    target_ssid
                 );
-                println!(
-                    "{}",
-                    "   💡 Tip: Make sure the network is broadcasting and you're in range."
-                );
+                println!("   💡 Tip: Make sure the network is broadcasting and you're in range.");
                 // Fallback: scan ALL possible channels
                 channels_to_scan = get_all_wifi_channels();
             } else {
                 println!(
-                    "{}",
-                    format!(
-                        "✓ Found '{}' on {} channel(s):",
-                        target_ssid,
-                        networks.len()
-                    )
+                    "✓ Found '{}' on {} channel(s):",
+                    target_ssid,
+                    networks.len()
                 );
                 for net in &networks {
                     let band_str = match net.band {
@@ -423,11 +464,8 @@ pub fn capture_traffic(
                         WifiBand::Band5GHz => "5GHz",
                     };
                     println!(
-                        "{}",
-                        format!(
-                            "  • Ch {} ({}) | BSSID: {} | RSSI: {} dBm",
-                            net.channel, band_str, net.bssid, net.rssi
-                        )
+                        "  • Ch {} ({}) | BSSID: {} | RSSI: {} dBm",
+                        net.channel, band_str, net.bssid, net.rssi
                     );
                     channels_to_scan.push(net.channel);
                 }
@@ -441,63 +479,46 @@ pub fn capture_traffic(
                 };
                 println!("{}", rotation_msg);
             }
-        } else if let Some(target_bssid_str) = bssid {
+        }
+    } else if let Some(target_bssid_str) = bssid {
+        if channel.is_none() {
             // No SSID, but BSSID provided
-            println!(
-                "{}",
-                format!("🔍 Scanning for BSSID {}...", target_bssid_str)
-            );
+            println!("🔍 Scanning for BSSID {}...", target_bssid_str);
 
             let networks = detect_channels_for_bssid(target_bssid_str);
 
             if networks.is_empty() {
                 println!(
-                    "{}",
-                    format!(
-                        "⚠️  Could not detect BSSID '{}'. Will scan ALL channels.",
-                        target_bssid_str
-                    )
+                    "⚠️  Could not detect BSSID '{}'. Will scan ALL channels.",
+                    target_bssid_str
                 );
                 channels_to_scan = get_all_wifi_channels();
             } else {
                 println!(
-                    "{}",
-                    format!(
-                        "✓ Found BSSID {} on {} channel(s):",
-                        target_bssid_str,
-                        networks.len()
-                    )
+                    "✓ Found BSSID {} on {} channel(s):",
+                    target_bssid_str,
+                    networks.len()
                 );
                 for net in &networks {
-                    println!(
-                        "{}",
-                        format!("  • Ch {} | RSSI: {} dBm", net.channel, net.rssi)
-                    );
+                    println!("  • Ch {} | RSSI: {} dBm", net.channel, net.rssi);
                     channels_to_scan.push(net.channel);
                 }
             }
-        } else {
-            // No SSID specified - scan all channels
-            println!(
-                "{}",
-                "ℹ️  No target SSID/BSSID specified. Scanning ALL channels."
-            );
-            channels_to_scan = get_all_wifi_channels();
         }
+    } else if channel.is_none() {
+        // No SSID specified - scan all channels
+        println!("ℹ️  No target SSID/BSSID specified. Scanning ALL channels.");
+        channels_to_scan = get_all_wifi_channels();
     } else {
         // Manual channel specified
-        channels_to_scan.push(channel.unwrap());
-        println!(
-            "{}",
-            format!("ℹ️  Monitoring on Channel {} (manual)", channel.unwrap())
-        );
+        if let Some(ch) = channel {
+            channels_to_scan.push(ch);
+            println!("ℹ️  Monitoring on Channel {} (manual)", ch);
+        }
     }
 
     if channels_to_scan.is_empty() {
-        println!(
-            "{}",
-            "⚠️  No channels to scan. Please specify --channel manually."
-        );
+        println!("⚠️  No channels to scan. Please specify --channel manually.");
         return Err(anyhow!("No channels detected"));
     }
 
@@ -550,7 +571,7 @@ pub fn capture_traffic(
     if !channels_to_scan.is_empty() {
         let initial_ch = channels_to_scan[0];
         set_channel_macos(interface, initial_ch);
-        println!("{}", format!("📡 Starting on Channel {}", initial_ch));
+        println!("📡 Starting on Channel {}", initial_ch);
     }
 
     // State for deauth attack
@@ -606,7 +627,7 @@ pub fn capture_traffic(
                         // Smart Dwell Anti-Stuck:
                         // If we see too many M2/M4 without M1, force rotation
                         if consecutive_partial_handshakes > 5 {
-                            println!("{}", "⚠️  Too many partial handshakes without M1. Force rotating channel...");
+                            println!("⚠️  Too many partial handshakes without M1. Force rotating channel...");
                             consecutive_partial_handshakes = 0;
                             last_channel_switch = std::time::Instant::now() - channel_dwell_time;
                         // Force switch
@@ -615,11 +636,8 @@ pub fn capture_traffic(
                             if last_channel_switch.elapsed().as_secs() > 2 {
                                 last_channel_switch = std::time::Instant::now();
                                 println!(
-                                    "{}",
-                                    format!(
-                                        "⏳ Activity detected on Channel {} - Extending scan...",
-                                        channels_to_scan[current_channel_idx]
-                                    )
+                                    "⏳ Activity detected on Channel {} - Extending scan...",
+                                    channels_to_scan[current_channel_idx]
                                 );
                             }
                         }
@@ -630,20 +648,20 @@ pub fn capture_traffic(
                                 consecutive_partial_handshakes = 0; // Valid M1 seen! We are likely on good channel.
                                 if let Some(anonce) = eapol.anonce {
                                     pending_handshakes.insert(eapol.client_mac, anonce);
-                                    println!("\n{}", format!("🔑 M1 (ANonce) - AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} → Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} [RC:{}]",
+                                    println!("\n🔑 M1 (ANonce) - AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} → Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} [RC:{}]",
                                         eapol.ap_mac[0], eapol.ap_mac[1], eapol.ap_mac[2], eapol.ap_mac[3], eapol.ap_mac[4], eapol.ap_mac[5],
                                         eapol.client_mac[0], eapol.client_mac[1], eapol.client_mac[2], eapol.client_mac[3], eapol.client_mac[4], eapol.client_mac[5],
                                         eapol.replay_counter
-                                    ));
+                                    );
                                 }
                             }
                             2 => {
                                 // M2: Check if we have M1
-                                println!("\n{}", format!("🔐 M2 (SNonce+MIC) - Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} → AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} [RC:{}]",
+                                println!("\n🔐 M2 (SNonce+MIC) - Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} → AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} [RC:{}]",
                                     eapol.client_mac[0], eapol.client_mac[1], eapol.client_mac[2], eapol.client_mac[3], eapol.client_mac[4], eapol.client_mac[5],
                                     eapol.ap_mac[0], eapol.ap_mac[1], eapol.ap_mac[2], eapol.ap_mac[3], eapol.ap_mac[4], eapol.ap_mac[5],
                                     eapol.replay_counter
-                                ));
+                                );
 
                                 if let Some(_stored_anonce) =
                                     pending_handshakes.get(&eapol.client_mac)
@@ -659,15 +677,12 @@ pub fn capture_traffic(
                                     };
 
                                     if is_target_network {
-                                        println!("\n{}", format!("🎉 COMPLETE HANDSHAKE (M1+M2) for Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                                        println!("\n🎉 COMPLETE HANDSHAKE (M1+M2) for Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
                                             eapol.client_mac[0], eapol.client_mac[1], eapol.client_mac[2], eapol.client_mac[3], eapol.client_mac[4], eapol.client_mac[5]
-                                        ));
+                                        );
 
                                         if let Some(network_ssid) = captured_ssid {
-                                            println!(
-                                                "{}",
-                                                format!("✅ Target SSID: '{}'", network_ssid)
-                                            );
+                                            println!("✅ Target SSID: '{}'", network_ssid);
                                         }
 
                                         if !handshake_found {
@@ -675,44 +690,37 @@ pub fn capture_traffic(
                                             // ... stop capture ...
                                             let current_ch = channels_to_scan[current_channel_idx];
                                             println!(
-                                                "{}",
-                                                format!(
-                                                    "🔒 Locked on Channel {} - Handshake complete!",
-                                                    current_ch
-                                                )
+                                                "🔒 Locked on Channel {} - Handshake complete!",
+                                                current_ch
                                             );
 
                                             // Warn if BSSID mismatch
                                             if !is_target {
                                                 // ...
                                                 if let Some(t_bssid) = target_bssid {
-                                                    println!("{}", format!("⚠️  NOTE: Captured BSSID {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} does not match Target {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                                                    println!("⚠️  NOTE: Captured BSSID {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} does not match Target {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
                                                         eapol.ap_mac[0], eapol.ap_mac[1], eapol.ap_mac[2], eapol.ap_mac[3], eapol.ap_mac[4], eapol.ap_mac[5],
                                                         t_bssid[0], t_bssid[1], t_bssid[2], t_bssid[3], t_bssid[4], t_bssid[5]
-                                                     ));
+                                                     );
                                                 }
                                             }
 
-                                            println!("{}", "⏳ Waiting 2 more seconds to capture any remaining packets...");
+                                            println!("⏳ Waiting 2 more seconds to capture any remaining packets...");
                                             std::thread::sleep(Duration::from_secs(2));
-                                            println!("{}", "🎯 Stopping capture automatically...");
+                                            println!("🎯 Stopping capture automatically...");
                                             running.store(false, Ordering::SeqCst);
                                         }
                                     } else {
                                         let wrong_ssid =
                                             captured_ssid.map(|s| s.as_str()).unwrap_or("Unknown");
-                                        println!("\n{}", format!("⚠️  COMPLETE HANDSHAKE found but for wrong network: '{}'", wrong_ssid));
+                                        println!("\n⚠️  COMPLETE HANDSHAKE found but for wrong network: '{}'", wrong_ssid);
                                         println!(
-                                            "{}",
-                                            format!(
-                                                "   Waiting for target SSID: '{}'",
-                                                ssid.unwrap_or("N/A")
-                                            )
+                                            "   Waiting for target SSID: '{}'",
+                                            ssid.unwrap_or("N/A")
                                         );
                                     }
                                 } else {
                                     println!(
-                                        "{}",
                                         "   ⚠️  M2 without matching M1 (might be out of order)"
                                     );
 
@@ -729,39 +737,39 @@ pub fn capture_traffic(
                                 }
                             }
                             3 => {
-                                println!("\n{}", format!("🔄 M3 - AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} → Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} [RC:{}]",
+                                println!("\n🔄 M3 - AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} → Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} [RC:{}]",
                                     eapol.ap_mac[0], eapol.ap_mac[1], eapol.ap_mac[2], eapol.ap_mac[3], eapol.ap_mac[4], eapol.ap_mac[5],
                                     eapol.client_mac[0], eapol.client_mac[1], eapol.client_mac[2], eapol.client_mac[3], eapol.client_mac[4], eapol.client_mac[5],
                                     eapol.replay_counter
-                                ));
+                                );
                             }
                             4 => {
-                                println!("\n{}", format!("✅ M4 - Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} → AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} [RC:{}]",
+                                println!("\n✅ M4 - Client {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} → AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} [RC:{}]",
                                     eapol.client_mac[0], eapol.client_mac[1], eapol.client_mac[2], eapol.client_mac[3], eapol.client_mac[4], eapol.client_mac[5],
                                     eapol.ap_mac[0], eapol.ap_mac[1], eapol.ap_mac[2], eapol.ap_mac[3], eapol.ap_mac[4], eapol.ap_mac[5],
                                     eapol.replay_counter
-                                ));
+                                );
                             }
                             _ => {
-                                println!("\n{}", format!("❓ Unknown EAPOL type {} from {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                                println!("\n❓ Unknown EAPOL type {} from {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
                                     eapol.message_type,
                                     eapol.ap_mac[0], eapol.ap_mac[1], eapol.ap_mac[2], eapol.ap_mac[3], eapol.ap_mac[4], eapol.ap_mac[5]
-                                ));
+                                );
                             }
                         }
                     } else {
                         // EAPOL from different AP
-                        println!("\n{}", format!("📦 EAPOL M{} from different AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} (ignored)",
+                        println!("\n📦 EAPOL M{} from different AP {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} (ignored)",
                             eapol.message_type,
                             eapol.ap_mac[0], eapol.ap_mac[1], eapol.ap_mac[2], eapol.ap_mac[3], eapol.ap_mac[4], eapol.ap_mac[5]
-                        ));
+                        );
                     }
                 }
 
                 if packets_count % 50 == 0 {
                     let elapsed = start.elapsed().as_secs();
                     let rate = if elapsed > 0 {
-                        packets_count / elapsed as u64
+                        packets_count / elapsed
                     } else {
                         0
                     };
@@ -797,19 +805,16 @@ pub fn capture_traffic(
 
                         if is_target {
                             // Target network - show in GREEN and BOLD
-                            println!("\n{}", format!("🎯 Found Target SSID '{}' with BSSID: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} on Channel {}",
-                                network_ssid, bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], current_ch));
+                            println!("\n🎯 Found Target SSID '{}' with BSSID: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} on Channel {}",
+                                network_ssid, bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], current_ch);
 
                             target_bssid = Some(bssid);
                             println!("🚀 Starting deauthentication attacks...");
-                            println!(
-                                "{}",
-                                "🔄 Continuing channel rotation for Smart Connect support"
-                            );
+                            println!("🔄 Continuing channel rotation for Smart Connect support");
                         } else {
                             // Other network - show dimmed for context
-                            println!("\n{}", format!("📡 Detected SSID '{}' - {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} on Channel {}",
-                                network_ssid, bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], current_ch));
+                            println!("\n📡 Detected SSID '{}' - {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} on Channel {}",
+                                network_ssid, bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], current_ch);
                         }
                     }
                 }
@@ -833,13 +838,10 @@ pub fn capture_traffic(
             let new_channel = channels_to_scan[current_channel_idx];
 
             println!(
-                "\n{}",
-                format!(
-                    "🔄 Switching to Channel {} ({}/{})",
-                    new_channel,
-                    current_channel_idx + 1,
-                    channels_to_scan.len()
-                )
+                "\n🔄 Switching to Channel {} ({}/{})",
+                new_channel,
+                current_channel_idx + 1,
+                channels_to_scan.len()
             );
 
             set_channel_macos(interface, new_channel);
@@ -883,21 +885,18 @@ pub fn capture_traffic(
             Ok(handshake) => {
                 // Verify the captured SSID matches the target
                 if handshake.ssid != target_ssid {
-                    println!(
-                        "{}",
-                        format!("❌ Wrong SSID captured: '{}'", handshake.ssid)
-                    );
-                    println!("{}", format!("   Expected: '{}'", target_ssid));
+                    println!("❌ Wrong SSID captured: '{}'", handshake.ssid);
+                    println!("   Expected: '{}'", target_ssid);
 
                     // Delete the file
                     if let Err(e) = std::fs::remove_file(output_file) {
-                        println!("{}", format!("⚠️  Failed to delete file: {}", e));
+                        println!("⚠️  Failed to delete file: {}", e);
                     } else {
-                        println!("{}", format!("🗑️  Deleted '{}' (wrong SSID)", output_file));
+                        println!("🗑️  Deleted '{}' (wrong SSID)", output_file);
                     }
 
-                    println!("\n{}", "💡 To crack the captured network instead, run:");
-                    println!("{}", format!("  bruteforce-wifi capture --interface en0 --ssid \"{}\" --output capture.cap", handshake.ssid));
+                    println!("\n💡 To crack the captured network instead, run:");
+                    println!("  bruteforce-wifi capture --interface en0 --ssid \"{}\" --output capture.cap", handshake.ssid);
 
                     return Err(anyhow!(
                         "Wrong SSID captured: expected '{}', got '{}'",
@@ -906,8 +905,8 @@ pub fn capture_traffic(
                     ));
                 }
 
-                println!("{}", format!("✅ Handshake verified and ready to crack!"));
-                println!("\n{}", "Handshake Details:");
+                println!("✅ Handshake verified and ready to crack!");
+                println!("\nHandshake Details:");
                 println!("  SSID: {}", handshake.ssid);
                 println!(
                     "  AP MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
@@ -920,29 +919,23 @@ pub fn capture_traffic(
                 );
                 println!("  Key Version: {}", handshake.key_version);
 
-                println!("\n{}", "Next step - Run crack command:");
+                println!("\nNext step - Run crack command:");
                 println!(
-                    "{}",
-                    format!(
-                        "  bruteforce-wifi crack numeric {} --min 8 --max 8",
-                        output_file
-                    )
+                    "  bruteforce-wifi crack numeric {} --min 8 --max 8",
+                    output_file
                 );
             }
             Err(e) => {
-                println!("{}", format!("⚠️  Handshake verification failed: {}", e));
+                println!("⚠️  Handshake verification failed: {}", e);
                 println!(
-                    "{}",
-                    format!(
-                        "   Expected SSID '{}' not found in capture file",
-                        target_ssid
-                    )
+                    "   Expected SSID '{}' not found in capture file",
+                    target_ssid
                 );
-                println!("\n{}", "Possible issues:");
+                println!("\nPossible issues:");
                 println!("  - Captured packets may be incomplete (missing M1 or M2)");
                 println!("  - Wrong SSID specified (check the network name)");
                 println!("  - Capture was too short to get a complete handshake");
-                println!("\n{}", "Try running capture again for longer duration.");
+                println!("\nTry running capture again for longer duration.");
             }
         }
     }
@@ -1102,7 +1095,7 @@ impl WifiBand {
 fn detect_all_channels_for_ssid(ssid: &str) -> Vec<NetworkInfo> {
     use std::process::Command;
 
-    println!("{}", format!("🔍 Scanning for SSID: '{}'", ssid));
+    println!("🔍 Scanning for SSID: '{}'", ssid);
 
     // Use Swift scanner
     if let Ok(networks) = scan_networks_swift() {
@@ -1128,11 +1121,8 @@ fn detect_all_channels_for_ssid(ssid: &str) -> Vec<NetworkInfo> {
             // Log
             for net in &results {
                 println!(
-                    "{}",
-                    format!(
-                        "  ✓ '{}' - {} - Ch {} - {} dBm",
-                        ssid, net.bssid, net.channel, net.rssi
-                    )
+                    "  ✓ '{}' - {} - Ch {} - {} dBm",
+                    ssid, net.bssid, net.channel, net.rssi
                 );
             }
             return results;
@@ -1165,10 +1155,7 @@ fn detect_all_channels_for_ssid(ssid: &str) -> Vec<NetworkInfo> {
     }
 
     // No networks found
-    println!(
-        "{}",
-        format!("⚠️  SSID '{}' not found in scanned networks", ssid)
-    );
+    println!("⚠️  SSID '{}' not found in scanned networks", ssid);
     Vec::new()
 }
 
@@ -1506,7 +1493,7 @@ if let interface = client.interface() {{
 /// Set channel on macOS using Swift or airport utility
 fn set_channel_macos(_interface: &str, channel: u32) {
     // Try Swift first (modern macOS)
-    if let Ok(_) = set_channel_swift(channel) {
+    if set_channel_swift(channel).is_ok() {
         return;
     }
 

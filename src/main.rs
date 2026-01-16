@@ -32,17 +32,27 @@ fn main() -> iced::Result {
     let is_root = is_root();
 
     if !is_root {
-        eprintln!("\n⚠️  WARNING: Not running as root!");
+        eprintln!("\n⚠️  WARNING: Not running with administrator privileges!");
         eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        eprintln!("Some features require root privileges:");
-        eprintln!("  • Network scanning (macOS)");
+        eprintln!("Some features require admin/root privileges:");
+        eprintln!("  • Network scanning");
         eprintln!("  • Packet capture");
-        eprintln!("");
-        eprintln!("To run with root privileges:");
-        eprintln!("  sudo ./target/release/bruteforce-wifi");
-        eprintln!("");
-        eprintln!("Or build and run:");
-        eprintln!("  cargo build --release && sudo ./target/release/bruteforce-wifi");
+        eprintln!();
+        eprintln!("🔧 How to run with administrator privileges:");
+        eprintln!();
+        eprintln!("METHOD 1 - Using helper script (Recommended):");
+        eprintln!("  chmod +x run-with-sudo.sh");
+        eprintln!("  ./run-with-sudo.sh");
+        eprintln!();
+        eprintln!("METHOD 2 - Direct sudo:");
+        eprintln!("  sudo -E ./target/release/bruteforce-wifi");
+        eprintln!("  (Note: -E preserves environment for GUI)");
+        eprintln!();
+        eprintln!("METHOD 3 - Build and run:");
+        eprintln!("  cargo build --release");
+        eprintln!("  sudo -E ./target/release/bruteforce-wifi");
+        eprintln!();
+        eprintln!("💡 The app will still open, but scan/capture will be limited.");
         eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     }
 

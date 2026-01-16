@@ -139,6 +139,71 @@ pub fn scan_networks_async(interface: String) -> ScanResult {
     }
 }
 
+/// Capture parameters
+pub struct CaptureParams {
+    pub interface: String,
+    pub channel: Option<u32>,
+    pub ssid: Option<String>,
+    pub bssid: Option<String>,
+    pub output_file: String,
+}
+
+/// Run capture in background with progress updates
+pub async fn capture_async(
+    params: CaptureParams,
+    state: Arc<CaptureState>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<CaptureProgress>,
+) -> CaptureProgress {
+    use bruteforce_wifi::CaptureOptions;
+
+    let _ = progress_tx.send(CaptureProgress::Started);
+    let _ = progress_tx.send(CaptureProgress::Log(
+        "Starting packet capture...".to_string(),
+    ));
+
+    // Clone output_file before moving params
+    let output_file = params.output_file.clone();
+    let interface = params.interface.clone();
+    let ssid = params.ssid.clone();
+    let bssid = params.bssid.clone();
+
+    // Run capture in blocking thread
+    let result = tokio::task::spawn_blocking(move || {
+        // Build capture options inside the blocking thread
+        let options = CaptureOptions {
+            interface: &interface,
+            channel: params.channel,
+            ssid: ssid.as_deref(),
+            bssid: bssid.as_deref(),
+            output_file: &params.output_file,
+            duration: None,  // Run until stopped
+            no_deauth: true, // macOS doesn't support deauth
+        };
+        bruteforce_wifi::capture_traffic(options)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(())) => {
+            let _ = progress_tx.send(CaptureProgress::Log(
+                "Capture completed successfully".to_string(),
+            ));
+            CaptureProgress::Finished {
+                output_file,
+                packets: state.packets_count.load(Ordering::Relaxed),
+            }
+        }
+        Ok(Err(e)) => {
+            let _ = progress_tx.send(CaptureProgress::Log(format!("Capture error: {}", e)));
+            CaptureProgress::Error(e.to_string())
+        }
+        Err(e) => {
+            let _ = progress_tx.send(CaptureProgress::Log(format!("Task error: {}", e)));
+            CaptureProgress::Error(e.to_string())
+        }
+    }
+}
+
 /// Run wordlist crack in background with progress updates
 pub async fn crack_wordlist_async(
     params: WordlistCrackParams,
@@ -174,7 +239,7 @@ pub async fn crack_wordlist_async(
     let reader = BufReader::new(file);
     let passwords: Vec<String> = reader
         .lines()
-        .filter_map(|line| line.ok())
+        .map_while(Result::ok)
         .filter(|line| !line.trim().is_empty())
         .filter(|line| line.len() >= 8 && line.len() <= 63)
         .map(|line| line.trim().to_string())
@@ -202,7 +267,7 @@ pub async fn crack_wordlist_async(
     // Run crack with progress updates
     let start = std::time::Instant::now();
     // Larger chunks reduce overhead and improve cache locality
-    let chunk_size = (passwords.len() / (params.threads * 4)).max(500).min(50000);
+    let chunk_size = (passwords.len() / (params.threads * 4)).clamp(500, 50000);
 
     use rayon::prelude::*;
     let found_password: Arc<parking_lot::Mutex<Option<String>>> =
@@ -224,7 +289,7 @@ pub async fn crack_wordlist_async(
             let current = state.attempts.fetch_add(1, Ordering::Relaxed);
 
             // Send progress every 5000 attempts (reduced from 1000 to improve performance)
-            if current % 5000 == 0 {
+            if current.is_multiple_of(5000) {
                 let elapsed = start.elapsed().as_secs_f64();
                 let rate = if elapsed > 0.0 {
                     current as f64 / elapsed
@@ -359,7 +424,7 @@ pub async fn crack_numeric_async(
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
                 // Send progress every 5000 attempts (reduced from 1000 to improve performance)
-                if current % 5000 == 0 {
+                if current.is_multiple_of(5000) {
                     let elapsed = start.elapsed().as_secs_f64();
                     let rate = if elapsed > 0.0 {
                         current as f64 / elapsed

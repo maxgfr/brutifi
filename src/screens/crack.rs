@@ -47,6 +47,7 @@ pub struct CrackScreen {
     pub total_attempts: u64,
     pub rate: f64,
     pub found_password: Option<String>,
+    pub password_not_found: bool,
     pub error_message: Option<String>,
     pub status_message: String,
     pub log_messages: Vec<String>,
@@ -69,6 +70,7 @@ impl Default for CrackScreen {
             total_attempts: 0,
             rate: 0.0,
             found_password: None,
+            password_not_found: false,
             error_message: None,
             status_message: "Ready to crack".to_string(),
             log_messages: Vec::new(),
@@ -85,60 +87,34 @@ impl CrackScreen {
             .color(colors::TEXT_DIM);
 
         // Handshake file input
-        let file_input_widget: Element<Message> = if self.use_captured_file {
-            // Show path as read-only when using captured file
-            let border_color = if self.handshake_path.is_empty() {
-                colors::BORDER
-            } else {
-                colors::SUCCESS
-            };
-
-            container(
-                text(&self.handshake_path)
-                    .size(14)
-                    .color(if self.handshake_path.is_empty() {
-                        colors::TEXT_DIM
-                    } else {
-                        colors::SUCCESS
-                    }),
-            )
-            .padding(10)
-            .width(Length::Fill)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(iced::Background::Color(colors::SURFACE)),
-                border: iced::Border {
-                    color: border_color,
-                    width: 1.0,
-                    radius: 6.0.into(),
-                },
-                ..Default::default()
-            })
-            .into()
-        } else {
-            // Show browse UI when not using captured file
-            row![
-                text_input("Browse for .cap file", &self.handshake_path)
-                    .on_input(Message::HandshakePathChanged)
-                    .padding(10)
-                    .size(14)
-                    .width(Length::Fill),
-                button(text("Browse").size(13))
-                    .padding([10, 15])
-                    .style(theme::secondary_button_style)
-                    .on_press(Message::BrowseHandshake),
-            ]
-            .spacing(10)
-            .into()
-        };
-
-        let handshake_input = column![
+        let mut handshake_input = column![
             text("Handshake File").size(13).color(colors::TEXT),
-            checkbox("Use captured file from Capture screen", self.use_captured_file)
-                .on_toggle(Message::UseCapturedFileToggled)
-                .size(14),
-            file_input_widget,
+            checkbox(
+                "Use captured file from Capture screen",
+                self.use_captured_file
+            )
+            .on_toggle(Message::UseCapturedFileToggled)
+            .size(14),
         ]
         .spacing(6);
+
+        // Only show file browse when NOT using captured file
+        if !self.use_captured_file {
+            handshake_input = handshake_input.push(
+                row![
+                    text_input("Browse for .cap file", &self.handshake_path)
+                        .on_input(Message::HandshakePathChanged)
+                        .padding(10)
+                        .size(14)
+                        .width(Length::Fill),
+                    button(text("Browse").size(13))
+                        .padding([10, 15])
+                        .style(theme::secondary_button_style)
+                        .on_press(Message::BrowseHandshake),
+                ]
+                .spacing(10),
+            );
+        }
 
         // Method selection
         let method_picker = column![
@@ -316,6 +292,34 @@ impl CrackScreen {
                             ))),
                             border: iced::Border {
                                 color: colors::SUCCESS,
+                                width: 2.0,
+                                radius: 6.0.into(),
+                            },
+                            ..Default::default()
+                        }),
+                    ]
+                    .spacing(10)
+                    .padding(15),
+                )
+                .style(theme::card_style),
+            )
+        } else if self.password_not_found {
+            Some(
+                container(
+                    column![
+                        text("Password Not Found").size(18).color(colors::DANGER),
+                        container(
+                            text("The password was not found in the tested combinations")
+                                .size(14)
+                                .color(colors::TEXT)
+                        )
+                        .padding(15)
+                        .style(|_| container::Style {
+                            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                                0.86, 0.21, 0.27, 0.2
+                            ))),
+                            border: iced::Border {
+                                color: colors::DANGER,
                                 width: 2.0,
                                 radius: 6.0.into(),
                             },

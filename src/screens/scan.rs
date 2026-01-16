@@ -13,25 +13,13 @@ use crate::theme::{self, colors};
 use bruteforce_wifi::WifiNetwork;
 
 /// Scan screen state
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ScanScreen {
     pub networks: Vec<WifiNetwork>,
     pub selected_network: Option<usize>,
     pub is_scanning: bool,
     pub error_message: Option<String>,
     pub location_services_warning: bool,
-}
-
-impl Default for ScanScreen {
-    fn default() -> Self {
-        Self {
-            networks: Vec::new(),
-            selected_network: None,
-            is_scanning: false,
-            error_message: None,
-            location_services_warning: false,
-        }
-    }
 }
 
 impl ScanScreen {
@@ -123,7 +111,7 @@ impl ScanScreen {
         };
 
         // Deauth button (always show warning on macOS)
-        let deauth_btn = if let Some(_) = self.selected_network {
+        let deauth_btn = if self.selected_network.is_some() {
             Some(
                 button(text("Send Deauth").size(14))
                     .padding([10, 20])
@@ -192,6 +180,14 @@ impl ScanScreen {
                         network.bssid.clone()
                     };
 
+                    // Check if this network has multiple channels (grouped SSIDs)
+                    let has_multiple_channels = network.channel.contains(',');
+                    let channel_display = if has_multiple_channels {
+                        format!("Channels: {}", network.channel)
+                    } else {
+                        format!("Ch {}", network.channel)
+                    };
+
                     let item_style = if is_selected {
                         theme::network_item_selected_style
                     } else {
@@ -202,17 +198,30 @@ impl ScanScreen {
                         container(
                             row![
                                 column![
-                                    text(network.ssid.clone()).size(15).color(if is_selected {
-                                        colors::SUCCESS
-                                    } else {
-                                        colors::TEXT
-                                    }),
+                                    row![
+                                        text(network.ssid.clone()).size(15).color(if is_selected {
+                                            colors::SUCCESS
+                                        } else {
+                                            colors::TEXT
+                                        }),
+                                        if has_multiple_channels {
+                                            text(" (Multi-band)").size(11).color(colors::PRIMARY)
+                                        } else {
+                                            text("")
+                                        }
+                                    ]
+                                    .spacing(6)
+                                    .align_y(iced::Alignment::Center),
                                     row![
                                         text(bssid_display).size(11).color(colors::TEXT_DIM),
                                         text(" | ").size(11).color(colors::TEXT_DIM),
-                                        text(format!("Ch {}", network.channel))
-                                            .size(11)
-                                            .color(colors::TEXT_DIM),
+                                        text(channel_display).size(11).color(
+                                            if has_multiple_channels {
+                                                colors::PRIMARY
+                                            } else {
+                                                colors::TEXT_DIM
+                                            }
+                                        ),
                                     ]
                                 ]
                                 .spacing(4),

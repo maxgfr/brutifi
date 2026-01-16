@@ -128,7 +128,7 @@ impl OfflineBruteForcer {
 
         // Parallel processing with optimal chunk size
         // Larger chunks reduce overhead and improve cache locality
-        let chunk_size = (passwords.len() / (self.threads * 4)).max(500).min(50000);
+        let chunk_size = (passwords.len() / (self.threads * 4)).clamp(500, 50000);
 
         passwords.par_chunks(chunk_size).find_any(|chunk| {
             for password in chunk.iter() {
