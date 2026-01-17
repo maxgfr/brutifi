@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.3](https://github.com/maxgfr/bruteforce-wifi/compare/v1.3.2...v1.3.3) (2026-01-17)
+
+
+### 🐛 Bug Fixes
+
+* **ci:** ensure push trigger is defined for main branch ([2994b0e](https://github.com/maxgfr/bruteforce-wifi/commit/2994b0ec1b04e3d51aa3a571dcf72e6534f8f0ed))
+
+
+### ♻️ Code Refactoring
+
+* **ci,release:** remove push trigger from CI and update semantic-release setup ([49f6a13](https://github.com/maxgfr/bruteforce-wifi/commit/49f6a1353d22d8fef6d3a000409fafdc7b7adb36))
+
 ## [1.3.2](https://github.com/maxgfr/bruteforce-wifi/compare/v1.3.1...v1.3.2) (2026-01-17)
 
 
