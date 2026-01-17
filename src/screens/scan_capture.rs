@@ -466,13 +466,16 @@ impl ScanCaptureScreen {
         let instructions = container(
             column![
                 text("How to capture:").size(11).color(colors::TEXT),
-                text("1. Start capture below")
+                text("1. macOS: Disconnect from WiFi (Option+Click Wifi -> Disconnect)")
+                    .size(10)
+                    .color(colors::WARNING),
+                text("2. Start capture below")
                     .size(10)
                     .color(colors::TEXT_DIM),
-                text("2. On another device, reconnect to the network")
+                text("3. On another device, reconnect to the network")
                     .size(10)
                     .color(colors::TEXT_DIM),
-                text("3. Handshake will be captured automatically")
+                text("4. Handshake will be captured automatically")
                     .size(10)
                     .color(colors::TEXT_DIM),
             ]

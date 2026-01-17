@@ -209,15 +209,14 @@ impl BruteforceApp {
                     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
                     self.capture_progress_rx = Some(rx);
 
-                    // Parse channel from network
+                    // Parse channel from network (robust)
                     let channel = network.channel.split(',').next().and_then(|ch| {
-                        // Extract number (handle cases like "36 (5GHz)" or "1")
-                        ch.trim()
-                            .chars()
-                            .take_while(|c| c.is_ascii_digit())
-                            .collect::<String>()
-                            .parse::<u32>()
-                            .ok()
+                        // Try to find the first sequence of digits
+                        // This handles "36 (5GHz)", "Channel 6", "1", etc.
+                        ch.split(|c: char| !c.is_ascii_digit())
+                            .filter(|s| !s.is_empty())
+                            .next()
+                            .and_then(|s| s.parse::<u32>().ok())
                     });
 
                     let params = CaptureParams {

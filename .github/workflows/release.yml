@@ -168,10 +168,11 @@ jobs:
           </plist>
           EOF
 
-          # Ad-hoc signing (required for Apple Silicon to run at all)
-          # Note: This does NOT fix the "Developer cannot be verified" warning for downloaded apps.
-          # Users currently need to run: xattr -cr "/Applications/WiFi Bruteforce.app"
-          codesign --force --deep --sign - "${APP_DIR}"
+      - name: Sign the app bundle using apple-code-sign-action
+        uses: indygreg/apple-code-sign-action@v1
+        with:
+          input_path: "WiFi Bruteforce.app"
+          output_path: "WiFi Bruteforce.app"
 
       - name: Create DMG
         run: |
