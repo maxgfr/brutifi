@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0](https://github.com/maxgfr/bruteforce-wifi/compare/v1.3.3...v1.4.0) (2026-01-17)
+
+
+### ✨ Features
+
+* **macOS:** add launcher script for root privileges and update binary naming ([46a5b64](https://github.com/maxgfr/bruteforce-wifi/commit/46a5b648f1c30b6e5b59037db4e23fa699dd5cab))
+
 ## [1.3.3](https://github.com/maxgfr/bruteforce-wifi/compare/v1.3.2...v1.3.3) (2026-01-17)
 
 
