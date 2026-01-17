@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0](https://github.com/maxgfr/bruteforce-wifi/compare/v1.2.0...v1.3.0) (2026-01-17)
+
+
+### ✨ Features
+
+* Enhance CI workflow, improve error handling, and optimize performance across multiple modules ([c66c7cc](https://github.com/maxgfr/bruteforce-wifi/commit/c66c7ccf29741304b05d59315d87b24964974c6c))
+
 ## [1.2.0](https://github.com/maxgfr/bruteforce-wifi/compare/v1.1.0...v1.2.0) (2026-01-17)
 
 
