@@ -29,7 +29,6 @@ fn is_root() -> bool {
     false
 }
 
-
 /// Setup panic handler to show errors instead of silent exit
 fn setup_panic_handler() {
     let default_hook = panic::take_hook();

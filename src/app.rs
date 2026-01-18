@@ -11,6 +11,7 @@ use std::sync::Arc;
 use iced::time;
 use iced::widget::{button, column, container, horizontal_rule, row, text, text_editor};
 use iced::{clipboard, Element, Length, Subscription, Task, Theme};
+use pcap::Device;
 
 use crate::screens::{CrackEngine, CrackMethod, CrackScreen, HandshakeProgress, ScanCaptureScreen};
 use crate::theme::colors;
@@ -40,6 +41,7 @@ pub enum Message {
     StopScan,
     ScanComplete(ScanResult),
     SelectNetwork(usize),
+    InterfaceSelected(String),
     BrowseCaptureFile,
     CaptureFileSelected(Option<PathBuf>),
     DownloadCapturedPcap,
@@ -76,7 +78,6 @@ pub struct BruteforceApp {
     screen: Screen,
     scan_capture_screen: ScanCaptureScreen,
     crack_screen: CrackScreen,
-    interface: String,
     is_root: bool,
     capture_state: Option<Arc<CaptureState>>,
     capture_progress_rx: Option<tokio::sync::mpsc::UnboundedReceiver<workers::CaptureProgress>>,
@@ -86,12 +87,17 @@ pub struct BruteforceApp {
 
 impl BruteforceApp {
     pub fn new(is_root: bool) -> (Self, Task<Message>) {
+        let interface_list = list_interfaces();
+        let selected_interface = choose_default_interface(&interface_list);
         (
             Self {
                 screen: Screen::ScanCapture,
-                scan_capture_screen: ScanCaptureScreen::default(),
+                scan_capture_screen: ScanCaptureScreen {
+                    interface_list,
+                    selected_interface,
+                    ..ScanCaptureScreen::default()
+                },
                 crack_screen: CrackScreen::default(),
-                interface: "en0".to_string(),
                 is_root,
                 capture_state: None,
                 capture_progress_rx: None,
@@ -151,7 +157,7 @@ impl BruteforceApp {
                 self.scan_capture_screen.is_scanning = true;
                 self.scan_capture_screen.error_message = None;
 
-                let interface = self.interface.clone();
+                let interface = self.scan_capture_screen.selected_interface.clone();
                 Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || workers::scan_networks_async(interface))
@@ -188,6 +194,10 @@ impl BruteforceApp {
                     // Reset bits captured
                     self.scan_capture_screen.packets_captured = 0;
                 }
+                Task::none()
+            }
+            Message::InterfaceSelected(interface) => {
+                self.scan_capture_screen.selected_interface = interface;
                 Task::none()
             }
             Message::BrowseCaptureFile => Task::perform(
@@ -297,7 +307,7 @@ impl BruteforceApp {
                     }
 
                     let params = CaptureParams {
-                        interface: self.interface.clone(),
+                        interface: self.scan_capture_screen.selected_interface.clone(),
                         channel,
                         ssid: Some(network.ssid.clone()),
                         output_file: self.scan_capture_screen.output_file.clone(),
@@ -745,6 +755,39 @@ impl BruteforceApp {
 
         main_col.into()
     }
+}
+
+fn list_interfaces() -> Vec<String> {
+    let mut interfaces: Vec<String> = Device::list()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|d| d.name)
+        .collect();
+    interfaces.sort();
+    interfaces.dedup();
+    if interfaces.is_empty() {
+        interfaces.push("en0".to_string());
+    }
+    interfaces
+}
+
+fn choose_default_interface(interfaces: &[String]) -> String {
+    if interfaces.iter().any(|name| name.as_str() == "en0") {
+        return "en0".to_string();
+    }
+    if let Some(name) = interfaces.iter().find(|name| name.as_str() == "wlan0") {
+        return name.clone();
+    }
+    if let Some(name) = interfaces
+        .iter()
+        .find(|name| name.as_str().starts_with("wl"))
+    {
+        return name.clone();
+    }
+    interfaces
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "en0".to_string())
 }
 
 /// Navigation button helper

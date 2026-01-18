@@ -6,7 +6,8 @@
  */
 
 use iced::widget::{
-    button, column, container, horizontal_rule, horizontal_space, row, scrollable, text, Column,
+    button, column, container, horizontal_rule, horizontal_space, pick_list, row, scrollable, text,
+    Column,
 };
 use iced::{Element, Length};
 
@@ -34,11 +35,11 @@ pub struct ScanCaptureScreen {
     pub networks: Vec<WifiNetwork>,
     pub selected_network: Option<usize>,
     pub is_scanning: bool,
+    pub interface_list: Vec<String>,
+    pub selected_interface: String,
 
     // Capture state
     pub target_network: Option<WifiNetwork>,
-    #[allow(dead_code)]
-    pub interface: String,
     pub output_file: String,
     pub is_capturing: bool,
     pub packets_captured: u64,
@@ -56,8 +57,9 @@ impl Default for ScanCaptureScreen {
             networks: Vec::new(),
             selected_network: None,
             is_scanning: false,
+            interface_list: Vec::new(),
+            selected_interface: "en0".to_string(),
             target_network: None,
-            interface: "en0".to_string(),
             output_file: "/tmp/capture.pcap".to_string(),
             is_capturing: false,
             packets_captured: 0,
@@ -113,6 +115,26 @@ impl ScanCaptureScreen {
         };
 
         let header = row![title, horizontal_space(), scan_btn,].align_y(iced::Alignment::Center);
+
+        let interface_picker: Element<Message> = if self.interface_list.is_empty() {
+            container(text("No interfaces found").size(11).color(colors::TEXT_DIM)).into()
+        } else {
+            let options = self.interface_list.clone();
+            pick_list(
+                options,
+                Some(self.selected_interface.clone()),
+                Message::InterfaceSelected,
+            )
+            .placeholder("Select interface")
+            .into()
+        };
+
+        let interface_row = row![
+            text("Interface").size(11).color(colors::TEXT_DIM),
+            interface_picker,
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center);
 
         // Network list
         let network_list: Element<Message> = if self.networks.is_empty() {
@@ -221,7 +243,7 @@ impl ScanCaptureScreen {
             None
         };
 
-        let mut content = column![header,].spacing(10);
+        let mut content = column![header, interface_row].spacing(10);
 
         content = content.push(
             container(network_list)
