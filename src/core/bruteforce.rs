@@ -108,9 +108,8 @@ impl OfflineBruteForcer {
                     let buf = PasswordBuffer::from_numeric(num, length);
                     if self.test_password_buffer(&buf) {
                         // Convert to String only when found
-                        let password = unsafe {
-                            String::from_utf8_unchecked(buf.as_bytes().to_vec())
-                        };
+                        let password =
+                            unsafe { String::from_utf8_unchecked(buf.as_bytes().to_vec()) };
                         *found_password_ref.lock() = Some(password);
                         found_ref.store(true, Ordering::Release);
                         return true;

@@ -4,14 +4,15 @@
  * Manages the application state machine and handles all messages.
  */
 
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::time;
-use iced::widget::{button, column, container, horizontal_rule, row, text};
-use iced::{Element, Length, Subscription, Task, Theme};
+use iced::widget::{button, column, container, horizontal_rule, row, text, text_editor};
+use iced::{clipboard, Element, Length, Subscription, Task, Theme};
 
-use crate::screens::{CrackMethod, CrackScreen, HandshakeProgress, ScanCaptureScreen};
+use crate::screens::{CrackEngine, CrackMethod, CrackScreen, HandshakeProgress, ScanCaptureScreen};
 use crate::theme::colors;
 use crate::workers::{
     self, CaptureParams, CaptureState, CrackState, NumericCrackParams, ScanResult,
@@ -41,6 +42,8 @@ pub enum Message {
     SelectNetwork(usize),
     BrowseCaptureFile,
     CaptureFileSelected(Option<PathBuf>),
+    DownloadCapturedPcap,
+    SaveCapturedPcap(Option<PathBuf>),
     StartCapture,
     StopCapture,
     CaptureProgress(workers::CaptureProgress),
@@ -48,6 +51,7 @@ pub enum Message {
     // Crack screen
     UseCapturedFileToggled(bool),
     HandshakePathChanged(String),
+    EngineChanged(CrackEngine),
     MethodChanged(CrackMethod),
     MinDigitsChanged(String),
     MaxDigitsChanged(String),
@@ -60,6 +64,8 @@ pub enum Message {
     StopCrack,
     CrackProgress(workers::CrackProgress),
     CopyPassword,
+    CopyLogs,
+    LogsEditorAction(text_editor::Action),
 
     // General
     Tick,
@@ -134,6 +140,7 @@ impl BruteforceApp {
                 self.crack_screen.current_attempts = 0;
                 self.crack_screen.progress = 0.0;
                 self.crack_screen.log_messages.clear();
+                self.crack_screen.logs_content = text_editor::Content::new();
 
                 self.screen = Screen::Crack;
                 Task::none()
@@ -202,9 +209,43 @@ impl BruteforceApp {
                 },
                 Message::CaptureFileSelected,
             ),
+            Message::DownloadCapturedPcap => Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .set_title("Save Captured PCAP")
+                        .add_filter("PCAP files", &["pcap"])
+                        .set_file_name("capture.pcap")
+                        .save_file()
+                        .await
+                        .map(|handle| handle.path().to_path_buf())
+                },
+                Message::SaveCapturedPcap,
+            ),
             Message::CaptureFileSelected(path) => {
                 if let Some(path) = path {
                     self.scan_capture_screen.output_file = path.to_string_lossy().to_string();
+                }
+                Task::none()
+            }
+            Message::SaveCapturedPcap(path) => {
+                if let Some(dest) = path {
+                    let src = PathBuf::from(&self.scan_capture_screen.output_file);
+                    if src.exists() {
+                        if let Err(e) = fs::copy(&src, &dest) {
+                            self.scan_capture_screen.error_message =
+                                Some(format!("Failed to save capture: {}", e));
+                        } else {
+                            self.scan_capture_screen
+                                .log_messages
+                                .push(format!("✅ Capture saved to {}", dest.display()));
+                            if self.scan_capture_screen.log_messages.len() > 50 {
+                                self.scan_capture_screen.log_messages.remove(0);
+                            }
+                        }
+                    } else {
+                        self.scan_capture_screen.error_message =
+                            Some(format!("Capture file not found: {}", src.display()));
+                    }
                 }
                 Task::none()
             }
@@ -213,7 +254,7 @@ impl BruteforceApp {
                     // Check if running as root
                     if !self.is_root {
                         self.scan_capture_screen.error_message = Some(
-                            "Capture requires root. In development mode, run with: sudo ./target/release/brutyfi"
+                            "Capture requires root. In development mode, run with: sudo ./target/release/brutifi"
                                 .to_string(),
                         );
                         return Task::none();
@@ -378,6 +419,10 @@ impl BruteforceApp {
                 self.crack_screen.handshake_path = path;
                 Task::none()
             }
+            Message::EngineChanged(engine) => {
+                self.crack_screen.engine = engine;
+                Task::none()
+            }
             Message::MethodChanged(method) => {
                 self.crack_screen.method = method;
                 Task::none()
@@ -487,6 +532,7 @@ impl BruteforceApp {
                 self.crack_screen.progress = 0.0;
                 self.crack_screen.status_message = "Starting...".to_string();
                 self.crack_screen.log_messages.clear();
+                self.crack_screen.logs_content = text_editor::Content::new();
 
                 let state = Arc::new(CrackState::new());
                 self.crack_state = Some(state.clone());
@@ -496,48 +542,89 @@ impl BruteforceApp {
 
                 match self.crack_screen.method {
                     CrackMethod::Numeric => {
-                        let params = NumericCrackParams {
-                            handshake_path,
-                            ssid: if self.crack_screen.ssid.is_empty() {
-                                None
-                            } else {
-                                Some(self.crack_screen.ssid.clone())
-                            },
-                            min_digits: self.crack_screen.min_digits.parse().unwrap_or(8),
-                            max_digits: self.crack_screen.max_digits.parse().unwrap_or(8),
-                            threads: self.crack_screen.threads,
-                        };
+                        // Check if using hashcat engine
+                        if self.crack_screen.engine == CrackEngine::Hashcat {
+                            let params = workers::HashcatCrackParams {
+                                handshake_path,
+                                wordlist_path: None,
+                                min_digits: Some(self.crack_screen.min_digits.parse().unwrap_or(8)),
+                                max_digits: Some(self.crack_screen.max_digits.parse().unwrap_or(8)),
+                                is_numeric: true,
+                            };
 
-                        // Calculate total
-                        let mut total: u64 = 0;
-                        for len in params.min_digits..=params.max_digits {
-                            total += 10u64.pow(len as u32);
+                            // Calculate total
+                            let mut total: u64 = 0;
+                            for len in params.min_digits.unwrap()..=params.max_digits.unwrap() {
+                                total += 10u64.pow(len as u32);
+                            }
+                            self.crack_screen.total_attempts = total;
+
+                            Task::perform(
+                                workers::crack_hashcat_async(params, state, tx),
+                                Message::CrackProgress,
+                            )
+                        } else {
+                            // Native CPU cracking
+                            let params = NumericCrackParams {
+                                handshake_path,
+                                ssid: if self.crack_screen.ssid.is_empty() {
+                                    None
+                                } else {
+                                    Some(self.crack_screen.ssid.clone())
+                                },
+                                min_digits: self.crack_screen.min_digits.parse().unwrap_or(8),
+                                max_digits: self.crack_screen.max_digits.parse().unwrap_or(8),
+                                threads: self.crack_screen.threads,
+                            };
+
+                            // Calculate total
+                            let mut total: u64 = 0;
+                            for len in params.min_digits..=params.max_digits {
+                                total += 10u64.pow(len as u32);
+                            }
+                            self.crack_screen.total_attempts = total;
+
+                            Task::perform(
+                                workers_optimized::crack_numeric_optimized(params, state, tx),
+                                Message::CrackProgress,
+                            )
                         }
-                        self.crack_screen.total_attempts = total;
-
-                        // Use Task::perform to run in background - this integrates with Iced's async runtime
-                        Task::perform(
-                            workers_optimized::crack_numeric_optimized(params, state, tx),
-                            Message::CrackProgress,
-                        )
                     }
                     CrackMethod::Wordlist => {
-                        let params = WordlistCrackParams {
-                            handshake_path,
-                            ssid: if self.crack_screen.ssid.is_empty() {
-                                None
-                            } else {
-                                Some(self.crack_screen.ssid.clone())
-                            },
-                            wordlist_path: PathBuf::from(&self.crack_screen.wordlist_path),
-                            threads: self.crack_screen.threads,
-                        };
+                        // Check if using hashcat engine
+                        if self.crack_screen.engine == CrackEngine::Hashcat {
+                            let params = workers::HashcatCrackParams {
+                                handshake_path,
+                                wordlist_path: Some(PathBuf::from(
+                                    &self.crack_screen.wordlist_path,
+                                )),
+                                min_digits: None,
+                                max_digits: None,
+                                is_numeric: false,
+                            };
 
-                        // Use Task::perform to run in background - this integrates with Iced's async runtime
-                        Task::perform(
-                            workers_optimized::crack_wordlist_optimized(params, state, tx),
-                            Message::CrackProgress,
-                        )
+                            Task::perform(
+                                workers::crack_hashcat_async(params, state, tx),
+                                Message::CrackProgress,
+                            )
+                        } else {
+                            // Native CPU cracking
+                            let params = WordlistCrackParams {
+                                handshake_path,
+                                ssid: if self.crack_screen.ssid.is_empty() {
+                                    None
+                                } else {
+                                    Some(self.crack_screen.ssid.clone())
+                                },
+                                wordlist_path: PathBuf::from(&self.crack_screen.wordlist_path),
+                                threads: self.crack_screen.threads,
+                            };
+
+                            Task::perform(
+                                workers_optimized::crack_wordlist_optimized(params, state, tx),
+                                Message::CrackProgress,
+                            )
+                        }
                     }
                 }
             }
@@ -576,6 +663,9 @@ impl BruteforceApp {
                         if self.crack_screen.log_messages.len() > 50 {
                             self.crack_screen.log_messages.remove(0);
                         }
+                        let logs_text = self.crack_screen.log_messages.join("\n");
+                        self.crack_screen.logs_content =
+                            text_editor::Content::with_text(&logs_text);
                     }
                     workers::CrackProgress::Found(password) => {
                         self.crack_screen.found_password = Some(password);
@@ -601,7 +691,20 @@ impl BruteforceApp {
                 Task::none()
             }
             Message::CopyPassword => {
-                // TODO: Copy to clipboard
+                if let Some(ref password) = self.crack_screen.found_password {
+                    return clipboard::write(password.clone());
+                }
+                Task::none()
+            }
+            Message::CopyLogs => {
+                let logs_text = self.crack_screen.log_messages.join("\n");
+                if !logs_text.is_empty() {
+                    return clipboard::write(logs_text);
+                }
+                Task::none()
+            }
+            Message::LogsEditorAction(action) => {
+                self.crack_screen.logs_content.perform(action);
                 Task::none()
             }
             Message::Tick => {

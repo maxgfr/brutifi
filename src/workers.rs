@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
-use brutyfi::{parse_cap_file, scan_networks, OfflineBruteForcer, WifiNetwork};
+use brutifi::{parse_cap_file, scan_networks, OfflineBruteForcer, WifiNetwork};
 
 /// Scan result from background worker
 #[derive(Debug, Clone)]
@@ -124,7 +124,7 @@ pub fn scan_networks_async(interface: String) -> ScanResult {
                 ScanResult::Error("No networks found".to_string())
             } else {
                 // Compact duplicate networks (same SSID, different channels/BSSIDs)
-                let compacted_networks = brutyfi::compact_duplicate_networks(networks);
+                let compacted_networks = brutifi::compact_duplicate_networks(networks);
 
                 // Check if BSSIDs are missing (Location Services issue)
                 let has_bssids = compacted_networks.iter().any(|n| !n.bssid.is_empty());
@@ -157,7 +157,7 @@ pub async fn capture_async(
     state: Arc<CaptureState>,
     progress_tx: tokio::sync::mpsc::UnboundedSender<CaptureProgress>,
 ) -> CaptureProgress {
-    use brutyfi::CaptureOptions;
+    use brutifi::CaptureOptions;
 
     let _ = progress_tx.send(CaptureProgress::Started);
     let _ = progress_tx.send(CaptureProgress::Log(
@@ -239,14 +239,14 @@ pub async fn capture_async(
         };
 
         // Try to capture, with better error messages
-        match brutyfi::capture_traffic(options) {
+        match brutifi::capture_traffic(options) {
             Ok(captured_ssid) => Ok(captured_ssid),
             Err(e) => {
                 let error_str = e.to_string();
                 // Provide more helpful error messages
                 if error_str.contains("permission denied") || error_str.contains("Operation not permitted") {
                     Err(anyhow::anyhow!(
-                        "Permission denied. Make sure to run with sudo: sudo ./target/release/brutyfi"
+                        "Permission denied. Make sure to run with sudo: sudo ./target/release/brutifi"
                     ))
                 } else if error_str.contains("monitor mode") || error_str.contains("rfmon") {
                     Err(anyhow::anyhow!(
@@ -413,7 +413,7 @@ pub async fn crack_wordlist_async(
                 });
             }
 
-            if brutyfi::verify_password(
+            if brutifi::verify_password(
                 password,
                 &forcer.handshake.ssid,
                 &forcer.handshake.ap_mac,
@@ -461,7 +461,7 @@ pub async fn crack_numeric_async(
     state: Arc<CrackState>,
     progress_tx: tokio::sync::mpsc::UnboundedSender<CrackProgress>,
 ) -> CrackProgress {
-    use brutyfi::password_gen::ParallelPasswordGenerator;
+    use brutifi::password_gen::ParallelPasswordGenerator;
     use rayon::prelude::*;
 
     // Load handshake with panic protection
@@ -562,7 +562,7 @@ pub async fn crack_numeric_async(
                     });
                 }
 
-                if brutyfi::verify_password(
+                if brutifi::verify_password(
                     password,
                     &handshake.ssid,
                     &handshake.ap_mac,
@@ -606,4 +606,177 @@ pub async fn crack_numeric_async(
         "Password not found in range".to_string(),
     ));
     CrackProgress::NotFound
+}
+
+/// Hashcat crack worker parameters
+pub struct HashcatCrackParams {
+    pub handshake_path: PathBuf,
+    pub wordlist_path: Option<PathBuf>,
+    pub min_digits: Option<usize>,
+    pub max_digits: Option<usize>,
+    pub is_numeric: bool,
+}
+
+/// Run hashcat crack in background with progress updates
+pub async fn crack_hashcat_async(
+    params: HashcatCrackParams,
+    state: Arc<CrackState>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<CrackProgress>,
+) -> CrackProgress {
+    use brutifi::{convert_to_hashcat_format, HashcatParams, HashcatResult};
+
+    let _ = progress_tx.send(CrackProgress::Log(
+        "Starting hashcat workflow...".to_string(),
+    ));
+
+    if !params.handshake_path.exists() {
+        let msg = format!(
+            "Handshake file not found: {}",
+            params.handshake_path.display()
+        );
+        let _ = progress_tx.send(CrackProgress::Error(msg.clone()));
+        return CrackProgress::Error(msg);
+    }
+
+    if !params.is_numeric {
+        if let Some(ref wordlist_path) = params.wordlist_path {
+            if !wordlist_path.exists() {
+                let msg = format!("Wordlist file not found: {}", wordlist_path.display());
+                let _ = progress_tx.send(CrackProgress::Error(msg.clone()));
+                return CrackProgress::Error(msg);
+            }
+        }
+    }
+
+    // Step 1: Convert PCAP to hashcat format
+    let _ = progress_tx.send(CrackProgress::Log(
+        "Converting capture file to hashcat format (.22000)...".to_string(),
+    ));
+
+    let pcap_path = params.handshake_path.clone();
+    let convert_result =
+        tokio::task::spawn_blocking(move || convert_to_hashcat_format(&pcap_path)).await;
+
+    let hash_file = match convert_result {
+        Ok(Ok(path)) => {
+            let _ = progress_tx.send(CrackProgress::Log(format!(
+                "Converted to: {}",
+                path.display()
+            )));
+            path
+        }
+        Ok(Err(e)) => {
+            return CrackProgress::Error(format!("Failed to convert capture: {}", e));
+        }
+        Err(e) => {
+            return CrackProgress::Error(format!("Task failed: {}", e));
+        }
+    };
+
+    // Step 2: Build hashcat params
+    let hashcat_params = if params.is_numeric {
+        let min = params.min_digits.unwrap_or(8);
+        let max = params.max_digits.unwrap_or(8);
+        let _ = progress_tx.send(CrackProgress::Log(format!(
+            "Starting numeric brute-force attack ({}-{} digits)...",
+            min, max
+        )));
+        HashcatParams::numeric(hash_file.clone(), min, max)
+    } else if let Some(wordlist) = params.wordlist_path {
+        let _ = progress_tx.send(CrackProgress::Log(format!(
+            "Starting wordlist attack with {}...",
+            wordlist.display()
+        )));
+        HashcatParams::wordlist(hash_file.clone(), wordlist)
+    } else {
+        return CrackProgress::Error("No attack method specified".to_string());
+    };
+
+    // Estimate total for numeric
+    let total = if params.is_numeric {
+        let min = params.min_digits.unwrap_or(8);
+        let max = params.max_digits.unwrap_or(8);
+        let mut t: u64 = 0;
+        for len in min..=max {
+            t += 10u64.pow(len as u32);
+        }
+        t
+    } else {
+        // Unknown for wordlist
+        0
+    };
+
+    let _ = progress_tx.send(CrackProgress::Started { total });
+    let _ = progress_tx.send(CrackProgress::Log(format!(
+        "Hashcat is running (hash file: {}, device type: -D {})",
+        hash_file.display(),
+        hashcat_params.device_types
+    )));
+
+    // Step 3: Run hashcat
+    let running = state.running.clone();
+    let progress_tx_clone = progress_tx.clone();
+
+    let total_attempts = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(total));
+    let total_attempts_clone = total_attempts.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        brutifi::core::hashcat::run_hashcat(
+            &hashcat_params,
+            |progress| {
+                // Update total attempts when hashcat reports keyspace
+                if progress.total_attempts > 0 {
+                    total_attempts_clone.store(progress.total_attempts, Ordering::Relaxed);
+                }
+
+                let total_attempts_val = total_attempts_clone.load(Ordering::Relaxed);
+                let current_attempts = if progress.current_attempts > 0 {
+                    progress.current_attempts
+                } else if total_attempts_val > 0 && progress.progress_percent > 0.0 {
+                    (progress.progress_percent * total_attempts_val as f64) as u64
+                } else {
+                    0
+                };
+
+                // Send progress updates
+                let _ = progress_tx_clone.send(CrackProgress::Progress {
+                    current: current_attempts,
+                    total: total_attempts_val,
+                    rate: progress.rate_per_sec,
+                });
+
+                let _ = progress_tx_clone.send(CrackProgress::Log(format!(
+                    "Hashcat: {} - {}",
+                    progress.status, progress.speed
+                )));
+            },
+            &running,
+        )
+    })
+    .await;
+
+    match result {
+        Ok(HashcatResult::Found(password)) => {
+            let _ = progress_tx.send(CrackProgress::Log(format!(
+                "✅ Password found: {}",
+                password
+            )));
+            CrackProgress::Found(password)
+        }
+        Ok(HashcatResult::NotFound) => {
+            let _ = progress_tx.send(CrackProgress::Log(
+                "Password not found in search space".to_string(),
+            ));
+            CrackProgress::NotFound
+        }
+        Ok(HashcatResult::Stopped) => {
+            let _ = progress_tx.send(CrackProgress::Log("Hashcat stopped by user".to_string()));
+            CrackProgress::Error("Stopped by user".to_string())
+        }
+        Ok(HashcatResult::Error(e)) => {
+            let _ = progress_tx.send(CrackProgress::Log(format!("Hashcat error: {}", e)));
+            CrackProgress::Error(e)
+        }
+        Err(e) => CrackProgress::Error(format!("Task failed: {}", e)),
+    }
 }

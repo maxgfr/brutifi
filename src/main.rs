@@ -174,7 +174,7 @@ fn main() -> iced::Result {
             eprintln!("  - Packet capture will not work");
             eprintln!();
             eprintln!("To run with admin privileges:");
-            eprintln!("  sudo ./target/release/brutyfi");
+            eprintln!("  sudo ./target/release/brutifi");
             eprintln!();
             eprintln!("Note: Crack mode works without admin privileges.");
             eprintln!("================================\n");
@@ -184,7 +184,7 @@ fn main() -> iced::Result {
     }
 
     // Run the GUI application
-    iced::application("BrutyFi", BruteforceApp::update, BruteforceApp::view)
+    iced::application("BrutiFi", BruteforceApp::update, BruteforceApp::view)
         .subscription(BruteforceApp::subscription)
         .theme(BruteforceApp::theme)
         .window_size(Size::new(900.0, 700.0))

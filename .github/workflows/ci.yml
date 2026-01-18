@@ -71,16 +71,16 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: bruteforce-wifi-macos-arm64
+            artifact_name: brutifi-macos-arm64
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: bruteforce-wifi-macos-x64
+            artifact_name: brutifi-macos-x64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: bruteforce-wifi-linux-x64
+            artifact_name: brutifi-linux-x64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: bruteforce-wifi-windows-x64
+            artifact_name: brutifi-windows-x64
     steps:
       - uses: actions/checkout@v4
 
@@ -108,14 +108,14 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           mkdir -p artifact
-          cp target/${{ matrix.target }}/release/bruteforce-wifi artifact/
-          chmod +x artifact/bruteforce-wifi
+          cp target/${{ matrix.target }}/release/brutifi artifact/
+          chmod +x artifact/brutifi
 
       - name: Prepare artifact (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           mkdir artifact
-          cp target/${{ matrix.target }}/release/bruteforce-wifi.exe artifact/
+          cp target/${{ matrix.target }}/release/brutifi.exe artifact/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

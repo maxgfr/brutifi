@@ -124,11 +124,20 @@ impl ParallelPasswordGenerator {
         let start = 0;
         let end = 10u64.pow(length as u32);
 
-        // Optimal batch size for parallel processing
+        // Adaptive batch size for parallel processing
         // Larger batches reduce rayon overhead, but we need enough batches for work stealing
         let total = end - start;
-        let batch_size = ((total as usize) / (threads * 8))
-            .clamp(10_000, 500_000);
+        let target_batches = if total < 1_000_000 {
+            threads.saturating_mul(2)
+        } else if total < 10_000_000 {
+            threads.saturating_mul(4)
+        } else if total < 100_000_000 {
+            threads.saturating_mul(8)
+        } else {
+            threads.saturating_mul(16)
+        }
+        .clamp(4, 256);
+        let batch_size: usize = ((total as usize) / target_batches).clamp(10_000, 500_000);
 
         Self {
             start,

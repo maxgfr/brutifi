@@ -9,5 +9,5 @@
 pub mod crack;
 pub mod scan_capture;
 
-pub use crack::{CrackMethod, CrackScreen};
+pub use crack::{CrackEngine, CrackMethod, CrackScreen};
 pub use scan_capture::{HandshakeProgress, ScanCaptureScreen};

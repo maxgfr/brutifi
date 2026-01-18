@@ -1,5 +1,5 @@
 [package]
-name = "brutyfi"
+name = "brutifi"
 version = "1.6.0"
 edition = "2021"
 description = "Cute and powerful WiFi security testing tool with real-time feedback"
@@ -8,7 +8,7 @@ repository = "https://github.com/maxgfr/bruteforce-wifi"
 authors = ["maxgfr"]
 
 [[bin]]
-name = "brutyfi"
+name = "brutifi"
 path = "src/main.rs"
 
 [dependencies]

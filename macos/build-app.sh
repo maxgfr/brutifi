@@ -7,12 +7,12 @@ set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-APP_NAME="BrutyFi"
-BUNDLE_ID="com.maxgfr.brutyfi"
+APP_NAME="BrutiFi"
+BUNDLE_ID="com.maxgfr.brutifi"
 # Extract version from Cargo.toml
 VERSION=$(grep "^version = " "$PROJECT_ROOT/Cargo.toml" | head -n 1 | sed 's/version = "\(.*\)"/\1/')
 
-echo "🔨 Building BrutyFi.app v${VERSION}..."
+echo "🔨 Building BrutiFi.app v${VERSION}..."
 
 # Build release binary
 cd "$PROJECT_ROOT"
@@ -32,7 +32,7 @@ mkdir -p "$RESOURCES_DIR"
 
 # Copy binary
 echo "📋 Copying binary..."
-cp "$PROJECT_ROOT/target/release/brutyfi" "$MACOS_DIR/"
+cp "$PROJECT_ROOT/target/release/brutifi" "$MACOS_DIR/"
 
 # Copy launcher script
 echo "📋 Copying launcher..."

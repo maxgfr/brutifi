@@ -79,14 +79,14 @@ jobs:
 
       - name: Create macOS App Bundle
         run: |
-          APP_NAME="WiFi Bruteforce"
+          APP_NAME="BrutiFi"
           VERSION="${{ needs.release.outputs.new_release_version }}"
           if [ -z "$VERSION" ]; then VERSION="0.0.0-dev.${{ github.run_number }}"; fi
           TARGET="${{ matrix.target }}"
 
           # Copy binary to release directory for the build script
           mkdir -p target/release
-          cp "target/${TARGET}/release/bruteforce-wifi" "target/release/bruteforce-wifi"
+          cp "target/${TARGET}/release/brutifi" "target/release/brutifi"
 
           # Use our build script
           chmod +x macos/build-app.sh
@@ -99,27 +99,27 @@ jobs:
       - name: Sign the app bundle using apple-code-sign-action
         uses: indygreg/apple-code-sign-action@v1
         with:
-          input_path: "WiFi Bruteforce.app"
-          output_path: "WiFi Bruteforce.app"
+          input_path: "target/release/BrutiFi.app"
+          output_path: "target/release/BrutiFi.app"
 
       - name: Create DMG
         run: |
-          APP_NAME="WiFi Bruteforce"
+          APP_NAME="BrutiFi"
           VERSION="${{ needs.release.outputs.new_release_version }}"
           if [ -z "$VERSION" ]; then VERSION="0.0.0-dev.${{ github.run_number }}"; fi
           TARGET="${{ matrix.target }}"
           ARCH="${{ matrix.target == 'aarch64-apple-darwin' && 'arm64' || 'x86_64' }}"
-          DMG_NAME="WiFi-Bruteforce-${VERSION}-macOS-${ARCH}.dmg"
+          DMG_NAME="BrutiFi-${VERSION}-macOS-${ARCH}.dmg"
           DMG_TEMP="dmg_temp"
 
           mkdir -p "${DMG_TEMP}"
           cp -R "target/release/${APP_NAME}.app" "${DMG_TEMP}/"
           ln -s /Applications "${DMG_TEMP}/Applications"
 
-          echo "WiFi Bruteforce v${VERSION}" > "${DMG_TEMP}/README.txt"
+          echo "BrutiFi v${VERSION}" > "${DMG_TEMP}/README.txt"
           echo "" >> "${DMG_TEMP}/README.txt"
           echo "Installation:" >> "${DMG_TEMP}/README.txt"
-          echo "1. Drag 'WiFi Bruteforce.app' to Applications folder" >> "${DMG_TEMP}/README.txt"
+          echo "1. Drag 'BrutiFi.app' to Applications folder" >> "${DMG_TEMP}/README.txt"
           echo "2. Double-click to launch" >> "${DMG_TEMP}/README.txt"
           echo "3. Grant Location Services permission when prompted" >> "${DMG_TEMP}/README.txt"
           echo "4. Enter your password when prompted for admin privileges" >> "${DMG_TEMP}/README.txt"
@@ -141,7 +141,7 @@ jobs:
           ARCH="${{ matrix.target == 'aarch64-apple-darwin' && 'arm64' || 'x86_64' }}"
           VERSION="${{ needs.release.outputs.new_release_version }}"
           if [ -z "$VERSION" ]; then VERSION="0.0.0-dev.${{ github.run_number }}"; fi
-          DMG_NAME="WiFi-Bruteforce-${VERSION}-macOS-${ARCH}.dmg"
+          DMG_NAME="BrutiFi-${VERSION}-macOS-${ARCH}.dmg"
           shasum -a 256 "${DMG_NAME}" > "${DMG_NAME}.sha256"
 
       - name: Upload to Release
@@ -150,8 +150,8 @@ jobs:
         with:
           tag_name: v${{ needs.release.outputs.new_release_version }}
           files: |
-            WiFi-Bruteforce-*.dmg
-            WiFi-Bruteforce-*.sha256
+            BrutiFi-*.dmg
+            BrutiFi-*.sha256
 
   build-windows:
     name: Build Windows (EXE)
@@ -183,13 +183,13 @@ jobs:
           $INSTALLER_NAME = "WiFi-Bruteforce-${VERSION}-Windows-x64.msi"
 
           # Simple ZIP for now (can be enhanced with WiX later)
-          Compress-Archive -Path "target\release\bruteforce-wifi.exe" -DestinationPath "WiFi-Bruteforce-${VERSION}-Windows-x64.zip"
+          Compress-Archive -Path "target\release\brutifi.exe" -DestinationPath "BrutiFi-${VERSION}-Windows-x64.zip"
 
       - name: Generate SHA256
         run: |
           $VERSION = "${{ needs.release.outputs.new_release_version }}"
           if ([string]::IsNullOrEmpty($VERSION)) { $VERSION = "0.0.0-dev.${{ github.run_number }}" }
-          $FILE = "WiFi-Bruteforce-${VERSION}-Windows-x64.zip"
+          $FILE = "BrutiFi-${VERSION}-Windows-x64.zip"
           Get-FileHash -Algorithm SHA256 -Path $FILE | ForEach-Object { "$($_.Hash.ToLower())  $FILE" } | Out-File -FilePath "${FILE}.sha256"
 
       - name: Upload to Release
@@ -198,8 +198,8 @@ jobs:
         with:
           tag_name: v${{ needs.release.outputs.new_release_version }}
           files: |
-            WiFi-Bruteforce-*.zip
-            WiFi-Bruteforce-*.sha256
+            BrutiFi-*.zip
+            BrutiFi-*.sha256
 
   build-linux:
     name: Build Linux
@@ -225,16 +225,16 @@ jobs:
         run: |
           VERSION="${{ needs.release.outputs.new_release_version }}"
           if [ -z "$VERSION" ]; then VERSION="0.0.0-dev.${{ github.run_number }}"; fi
-          ARCHIVE_NAME="WiFi-Bruteforce-${VERSION}-Linux-x86_64.tar.gz"
+          ARCHIVE_NAME="BrutiFi-${VERSION}-Linux-x86_64.tar.gz"
 
           mkdir -p release_dist
-          cp target/release/bruteforce-wifi release_dist/
+          cp target/release/brutifi release_dist/
 
           tar -czf "$ARCHIVE_NAME" -C release_dist .
 
       - name: Generate SHA256
         run: |
-          FILE=$(ls WiFi-Bruteforce-*-Linux-*.tar.gz | head -n 1)
+          FILE=$(ls BrutiFi-*-Linux-*.tar.gz | head -n 1)
           shasum -a 256 "$FILE" > "$FILE.sha256"
 
       - name: Upload to Release
@@ -243,5 +243,5 @@ jobs:
         with:
           tag_name: v${{ needs.release.outputs.new_release_version }}
           files: |
-            WiFi-Bruteforce-*-Linux-*.tar.gz
-            WiFi-Bruteforce-*-Linux-*.sha256
+            BrutiFi-*-Linux-*.tar.gz
+            BrutiFi-*-Linux-*.sha256

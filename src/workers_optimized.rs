@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use brutyfi::{parse_cap_file, OfflineBruteForcer};
+use brutifi::{parse_cap_file, OfflineBruteForcer};
 
 use super::workers::{CrackProgress, CrackState, NumericCrackParams, WordlistCrackParams};
 
@@ -134,7 +134,7 @@ fn crack_wordlist_blocking(
                 });
             }
 
-            if brutyfi::verify_password(
+            if brutifi::verify_password(
                 password,
                 &forcer.handshake.ssid,
                 &forcer.handshake.ap_mac,
@@ -204,7 +204,7 @@ fn crack_numeric_blocking(
     state: Arc<CrackState>,
     progress_tx: tokio::sync::mpsc::UnboundedSender<CrackProgress>,
 ) -> CrackProgress {
-    use brutyfi::password_gen::ParallelPasswordGenerator;
+    use brutifi::password_gen::ParallelPasswordGenerator;
     use rayon::prelude::*;
 
     // Load handshake
@@ -297,7 +297,7 @@ fn crack_numeric_blocking(
                     });
                 }
 
-                if brutyfi::verify_password(
+                if brutifi::verify_password(
                     password,
                     &handshake.ssid,
                     &handshake.ap_mac,

@@ -413,7 +413,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "brutyfi"
+name = "brutifi"
 version = "1.6.0"
 dependencies = [
  "aes",

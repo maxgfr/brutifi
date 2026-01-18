@@ -3,15 +3,34 @@
  *
  * Handles WPA/WPA2 password cracking.
  * Supports both numeric and wordlist attacks.
+ * Can use native CPU cracking or external GPU tools (hashcat + hcxtools).
  */
 
 use iced::widget::{
-    button, checkbox, column, container, horizontal_space, pick_list, row, text, text_input,
+    button, checkbox, column, container, horizontal_space, pick_list, row, text, text_editor,
+    text_input,
 };
 use iced::{Element, Length};
 
 use crate::app::Message;
 use crate::theme::{self, colors};
+
+/// Cracking engine selection
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CrackEngine {
+    #[default]
+    Native,
+    Hashcat,
+}
+
+impl std::fmt::Display for CrackEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CrackEngine::Native => write!(f, "Native (CPU)"),
+            CrackEngine::Hashcat => write!(f, "Hashcat (GPU) ⚡"),
+        }
+    }
+}
 
 /// Crack method selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -31,11 +50,12 @@ impl std::fmt::Display for CrackMethod {
 }
 
 /// Crack screen state
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CrackScreen {
     pub handshake_path: String,
     pub use_captured_file: bool,
     pub ssid: String,
+    pub engine: CrackEngine,
     pub method: CrackMethod,
     pub min_digits: String,
     pub max_digits: String,
@@ -51,14 +71,21 @@ pub struct CrackScreen {
     pub error_message: Option<String>,
     pub status_message: String,
     pub log_messages: Vec<String>,
+    pub logs_content: iced::widget::text_editor::Content,
+    pub hashcat_available: bool,
+    pub hcxtools_available: bool,
 }
 
 impl Default for CrackScreen {
     fn default() -> Self {
+        // Check external tools availability
+        let (hcxtools, hashcat) = brutifi::are_external_tools_available();
+
         Self {
-            handshake_path: "capture.cap".to_string(),
+            handshake_path: "/tmp/capture.pcap".to_string(),
             use_captured_file: true,
             ssid: String::new(),
+            engine: CrackEngine::Native,
             method: CrackMethod::Numeric,
             min_digits: "8".to_string(),
             max_digits: "8".to_string(),
@@ -74,6 +101,9 @@ impl Default for CrackScreen {
             error_message: None,
             status_message: "Ready to crack".to_string(),
             log_messages: Vec::new(),
+            logs_content: iced::widget::text_editor::Content::new(),
+            hashcat_available: hashcat,
+            hcxtools_available: hcxtools,
         }
     }
 }
@@ -85,6 +115,81 @@ impl CrackScreen {
         let subtitle = text("Bruteforce WPA/WPA2 password from captured handshake")
             .size(14)
             .color(colors::TEXT_DIM);
+
+        // Engine selection (Native vs Hashcat)
+        let engine_options: Vec<CrackEngine> = if self.hashcat_available && self.hcxtools_available
+        {
+            vec![CrackEngine::Native, CrackEngine::Hashcat]
+        } else {
+            vec![CrackEngine::Native]
+        };
+
+        let engine_warning = if !self.hashcat_available || !self.hcxtools_available {
+            let missing = match (self.hcxtools_available, self.hashcat_available) {
+                (false, false) => "hcxtools and hashcat not found",
+                (false, true) => "hcxtools not found",
+                (true, false) => "hashcat not found",
+                _ => "",
+            };
+            Some(
+                text(format!(
+                    "💡 {} - Install for GPU acceleration (10-100x faster)",
+                    missing
+                ))
+                .size(11)
+                .color(colors::WARNING),
+            )
+        } else {
+            None
+        };
+
+        let mut engine_picker = column![
+            text("Cracking Engine").size(13).color(colors::TEXT),
+            pick_list(engine_options, Some(self.engine), Message::EngineChanged,)
+                .padding(10)
+                .width(Length::Fill),
+        ]
+        .spacing(6);
+
+        if let Some(warning) = engine_warning {
+            engine_picker = engine_picker.push(warning);
+        }
+
+        // Engine info card
+        let engine_info: Element<Message> = match self.engine {
+            CrackEngine::Native => container(
+                column![
+                    text("CPU-based cracking").size(13).color(colors::TEXT),
+                    text(format!(
+                        "Uses {} CPU threads for parallel password testing",
+                        self.threads
+                    ))
+                    .size(11)
+                    .color(colors::TEXT_DIM),
+                ]
+                .spacing(4)
+                .padding(10),
+            )
+            .style(theme::card_style)
+            .into(),
+            CrackEngine::Hashcat => container(
+                column![
+                    row![text("⚡ GPU-accelerated cracking")
+                        .size(13)
+                        .color(colors::SUCCESS),],
+                    text("Uses hashcat + hcxtools for maximum speed")
+                        .size(11)
+                        .color(colors::TEXT_DIM),
+                    text("Converts PCAP → .22000 format → hashcat mode 22000")
+                        .size(10)
+                        .color(colors::TEXT_DIM),
+                ]
+                .spacing(4)
+                .padding(10),
+            )
+            .style(theme::card_style)
+            .into(),
+        };
 
         // Handshake file input
         let mut handshake_input = column![
@@ -199,13 +304,20 @@ impl CrackScreen {
             .into(),
         };
 
-        // Threads configuration
-        let threads_config = column![text(format!(
-            "Threads: {} (optimized for your CPU)",
-            self.threads
-        ))
-        .size(13)
-        .color(colors::TEXT_DIM),];
+        // Threads configuration (only show for native engine)
+        let threads_config: Option<Element<Message>> = if self.engine == CrackEngine::Native {
+            Some(
+                column![text(format!(
+                    "Threads: {} (optimized for your CPU)",
+                    self.threads
+                ))
+                .size(13)
+                .color(colors::TEXT_DIM)]
+                .into(),
+            )
+        } else {
+            None
+        };
 
         // Progress display
         let progress_display =
@@ -393,27 +505,24 @@ impl CrackScreen {
 
         // Logs display
         let logs_display = if !self.log_messages.is_empty() {
-            let logs: Vec<Element<Message>> = self
-                .log_messages
-                .iter()
-                .map(|msg| {
-                    text(format!("• {}", msg))
-                        .size(11)
-                        .color(colors::TEXT_DIM)
-                        .into()
-                })
-                .collect();
+            let header = row![
+                text("Logs").size(13).color(colors::TEXT),
+                horizontal_space(),
+                button(text("Copy logs").size(11))
+                    .padding([6, 10])
+                    .style(theme::secondary_button_style)
+                    .on_press(Message::CopyLogs),
+            ];
 
             Some(
                 container(
                     column![
-                        text("Logs").size(13).color(colors::TEXT),
-                        iced::widget::scrollable(
-                            iced::widget::Column::with_children(logs)
-                                .spacing(2)
-                                .width(Length::Fill)
-                        )
-                        .height(Length::Fixed(150.0))
+                        header,
+                        text_editor(&self.logs_content)
+                            .on_action(Message::LogsEditorAction)
+                            .padding(8)
+                            .size(11)
+                            .height(Length::Fixed(150.0))
                     ]
                     .spacing(8)
                     .padding(15),
@@ -428,12 +537,17 @@ impl CrackScreen {
         let mut content = column![
             title,
             subtitle,
+            engine_picker,
+            engine_info,
             handshake_input,
             method_picker,
             method_options,
-            threads_config,
         ]
         .spacing(15);
+
+        if let Some(threads) = threads_config {
+            content = content.push(threads);
+        }
 
         if let Some(progress) = progress_display {
             content = content.push(progress);

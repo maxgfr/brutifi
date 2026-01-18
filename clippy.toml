@@ -1,0 +1,22 @@
+# Clippy configuration for bruteforce-wifi
+# https://doc.rust-lang.org/clippy/configuration.html
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 30
+
+# Maximum allowed length for public enums
+enum-variant-name-threshold = 3
+
+# Maximum allowed length for trait names
+type-complexity-threshold = 500
+
+# Maximum lines for a single function
+too-many-lines-threshold = 150
+
+# Allow TODOs in code
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
+
+# Suppress pedantic warnings that are too strict
+# We'll allow these patterns as they're common in our codebase
+avoid-breaking-exported-api = false

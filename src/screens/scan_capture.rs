@@ -12,7 +12,7 @@ use iced::{Element, Length};
 
 use crate::app::Message;
 use crate::theme::{self, colors};
-use brutyfi::WifiNetwork;
+use brutifi::WifiNetwork;
 
 /// EAPOL message tracking
 #[derive(Debug, Clone, Default)]
@@ -64,7 +64,7 @@ impl Default for ScanCaptureScreen {
             location_services_warning: false,
             target_network: None,
             interface: "en0".to_string(),
-            output_file: "capture.pcap".to_string(),
+            output_file: "/tmp/capture.pcap".to_string(),
             is_capturing: false,
             packets_captured: 0,
             handshake_progress: HandshakeProgress::default(),
@@ -519,6 +519,17 @@ impl ScanCaptureScreen {
             None
         };
 
+        let download_btn = if self.handshake_complete || self.handshake_progress.is_complete() {
+            Some(
+                button(text("Download captured pcap").size(13))
+                    .padding([10, 20])
+                    .style(theme::secondary_button_style)
+                    .on_press(Message::DownloadCapturedPcap),
+            )
+        } else {
+            None
+        };
+
         // Build layout
         let mut content = column![title, horizontal_rule(1), network_selector,].spacing(10);
 
@@ -574,6 +585,9 @@ impl ScanCaptureScreen {
 
         let mut button_row = row![capture_btn,].spacing(10);
         if let Some(btn) = continue_btn {
+            button_row = button_row.push(btn);
+        }
+        if let Some(btn) = download_btn {
             button_row = button_row.push(btn);
         }
         content = content.push(button_row);
