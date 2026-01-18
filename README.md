@@ -196,7 +196,20 @@ cargo test
 ```
 
 
-## 🔒 Security & Legal
+## 💡 Inspiration
+
+This project was inspired by several groundbreaking tools in the WiFi security space:
+
+- [AirJack](https://github.com/rtulke/AirJack) - A pioneering WiFi 802.11 packet injection framework that laid the groundwork for many wireless security tools
+- [Aircrack-ng](https://github.com/aircrack-ng/aircrack-ng) - The industry-standard suite for WiFi security auditing and WEP/WPA/WPA2 cracking
+- [Hashcat](https://github.com/hashcat/hashcat) - World's fastest password recovery tool, demonstrating the power of GPU acceleration for hash cracking
+- [Pyrit](https://github.com/JPaulMora/Pyrit) - Showed the potential of pre-computed tables for WPA-PSK attacks
+- [Cowpatty](https://github.com/joswr1ght/cowpatty) - Early implementation of WPA-PSK cracking using dictionary attacks
+- [hcxtools](https://github.com/ZerBea/hcxtools) - Advanced collection of tools for wireless security auditing, including WPA/WPA2 handshake capture and conversion
+
+These tools demonstrated the feasibility of offline WPA/WPA2 password attacks and inspired the creation of a modern, user-friendly desktop application that combines their best features with a contemporary GUI and improved performance.
+
+## � Security & Legal
 
 ### Disclaimer
 

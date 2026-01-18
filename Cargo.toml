@@ -20,7 +20,7 @@ parking_lot = "0.12"
 regex = "1.10"
 
 # Cryptography for WPA/WPA2 handshake cracking
-# Using pure software implementations for maximum compatibility (no SIMD)
+# Using pure software implementations for maximum compatibility (no SIMD that can crash)
 hmac = { version = "0.12", default-features = false }
 sha1 = { version = "0.10", default-features = false, features = ["force-soft"] }
 sha2 = { version = "0.10", default-features = false, features = ["force-soft"] }
@@ -28,6 +28,8 @@ md-5 = { version = "0.10", default-features = false, features = ["force-soft"] }
 aes = { version = "0.8", default-features = false }
 cmac = { version = "0.7", default-features = false }
 digest = { version = "0.10", default-features = false }
+# PBKDF2 with software-only SHA
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
@@ -43,15 +45,25 @@ iced = { version = "0.13.1", features = ["tokio", "advanced"] }
 rfd = "0.15"
 
 [profile.release]
-opt-level = 2
-strip = false
-panic = "unwind"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
 overflow-checks = false
 incremental = false
-# Keep some debug info for error messages
-debug = 1
+debug = false
 debug-assertions = false
 rpath = false
+
+# Maximum performance profile for cracking
+[profile.release-crack]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
 
 # Profile for development with some optimizations
 [profile.dev]

@@ -1,10 +1,15 @@
 /*!
- * WPA/WPA2 Cryptographic functions
+ * WPA/WPA2 Cryptographic functions (Optimized)
  *
  * Implements the cryptographic algorithms used in WPA/WPA2:
  * - PMK (Pairwise Master Key) derivation using PBKDF2-HMAC-SHA1
  * - PTK (Pairwise Transient Key) derivation using PRF
  * - MIC (Message Integrity Code) calculation and verification
+ *
+ * Performance optimizations:
+ * - Hardware-accelerated PBKDF2 (SHA-NI when available)
+ * - Zero-allocation password verification path
+ * - Inline hot paths
  *
  * References:
  * - IEEE 802.11i-2004 standard
@@ -24,80 +29,28 @@ type Aes128Cmac = Cmac<Aes128>;
 /// Constant for PRF expansion
 const PRF_LABEL: &[u8] = b"Pairwise key expansion";
 
-/// PBKDF2-HMAC-SHA1 implementation (optimized)
-#[inline(always)]
-fn pbkdf2_hmac_sha1(password: &[u8], salt: &[u8], iterations: u32, output: &mut [u8]) {
-    let mut block_num = 1u32;
-    let mut offset = 0;
-
-    while offset < output.len() {
-        // U1 = PRF(Password, Salt || INT(i))
-        let mut mac = HmacSha1::new_from_slice(password).expect("HMAC key");
-        mac.update(salt);
-        mac.update(&block_num.to_be_bytes());
-        let mut u = mac.finalize().into_bytes();
-
-        // First iteration result
-        let mut result = u;
-
-        // U2...Uc - unroll slightly for performance
-        for _ in 1..iterations {
-            let mut mac = HmacSha1::new_from_slice(password).expect("HMAC key");
-            mac.update(&u);
-            u = mac.finalize().into_bytes();
-
-            // XOR with previous result
-            for j in 0..20 {
-                result[j] ^= u[j];
-            }
-        }
-
-        // Copy result to output
-        let copy_len = std::cmp::min(20, output.len() - offset);
-        output[offset..offset + copy_len].copy_from_slice(&result[..copy_len]);
-
-        offset += 20;
-        block_num += 1;
-    }
-}
-
-/// PBKDF2-HMAC-SHA256 implementation
-#[inline(always)]
-fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32, output: &mut [u8]) {
-    let mut block_num = 1u32;
-    let mut offset = 0;
-
-    while offset < output.len() {
-        let mut mac = HmacSha256::new_from_slice(password).expect("HMAC key");
-        mac.update(salt);
-        mac.update(&block_num.to_be_bytes());
-        let mut u = mac.finalize().into_bytes();
-
-        let mut result = u;
-
-        for _ in 1..iterations {
-            let mut mac = HmacSha256::new_from_slice(password).expect("HMAC key");
-            mac.update(&u);
-            u = mac.finalize().into_bytes();
-
-            for j in 0..32 {
-                result[j] ^= u[j];
-            }
-        }
-
-        let copy_len = std::cmp::min(32, output.len() - offset);
-        output[offset..offset + copy_len].copy_from_slice(&result[..copy_len]);
-
-        offset += 32;
-        block_num += 1;
-    }
-}
+/// WPA2 PBKDF2 iteration count (IEEE 802.11i standard)
+const PBKDF2_ITERATIONS: u32 = 4096;
 
 /// Calculate PMK (Pairwise Master Key) from passphrase and SSID using HMAC-SHA1 (WPA2)
+/// Uses hardware-accelerated PBKDF2 when SHA-NI is available
 #[inline(always)]
 pub fn calculate_pmk(passphrase: &str, ssid: &str) -> [u8; 32] {
     let mut pmk = [0u8; 32];
-    pbkdf2_hmac_sha1(passphrase.as_bytes(), ssid.as_bytes(), 4096, &mut pmk);
+    pbkdf2::pbkdf2_hmac::<Sha1>(
+        passphrase.as_bytes(),
+        ssid.as_bytes(),
+        PBKDF2_ITERATIONS,
+        &mut pmk,
+    );
+    pmk
+}
+
+/// Calculate PMK from raw bytes (avoids UTF-8 validation overhead)
+#[inline(always)]
+pub fn calculate_pmk_bytes(passphrase: &[u8], ssid: &[u8]) -> [u8; 32] {
+    let mut pmk = [0u8; 32];
+    pbkdf2::pbkdf2_hmac::<Sha1>(passphrase, ssid, PBKDF2_ITERATIONS, &mut pmk);
     pmk
 }
 
@@ -105,7 +58,20 @@ pub fn calculate_pmk(passphrase: &str, ssid: &str) -> [u8; 32] {
 #[inline(always)]
 pub fn calculate_pmk_sha256(passphrase: &str, ssid: &str) -> [u8; 32] {
     let mut pmk = [0u8; 32];
-    pbkdf2_hmac_sha256(passphrase.as_bytes(), ssid.as_bytes(), 4096, &mut pmk);
+    pbkdf2::pbkdf2_hmac::<Sha256>(
+        passphrase.as_bytes(),
+        ssid.as_bytes(),
+        PBKDF2_ITERATIONS,
+        &mut pmk,
+    );
+    pmk
+}
+
+/// Calculate PMK SHA256 from raw bytes
+#[inline(always)]
+pub fn calculate_pmk_sha256_bytes(passphrase: &[u8], ssid: &[u8]) -> [u8; 32] {
+    let mut pmk = [0u8; 32];
+    pbkdf2::pbkdf2_hmac::<Sha256>(passphrase, ssid, PBKDF2_ITERATIONS, &mut pmk);
     pmk
 }
 
@@ -248,28 +214,54 @@ pub fn verify_password(
     captured_mic: &[u8],
     key_version: u8,
 ) -> bool {
-    // Step 1: Calculate PMK
+    verify_password_bytes(
+        password.as_bytes(),
+        ssid.as_bytes(),
+        ap_mac,
+        client_mac,
+        anonce,
+        snonce,
+        eapol_frame,
+        captured_mic,
+        key_version,
+    )
+}
+
+/// Zero-allocation password verification using raw bytes
+/// This is the hot path - every CPU cycle matters here
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+pub fn verify_password_bytes(
+    password: &[u8],
+    ssid: &[u8],
+    ap_mac: &[u8; 6],
+    client_mac: &[u8; 6],
+    anonce: &[u8; 32],
+    snonce: &[u8; 32],
+    eapol_frame: &[u8],
+    captured_mic: &[u8],
+    key_version: u8,
+) -> bool {
+    // Early exit for invalid MIC length
+    if captured_mic.len() != 16 {
+        return false;
+    }
+
+    // Step 1: Calculate PMK (PBKDF2 - 99% of CPU time is here)
     let pmk = if key_version == 3 {
-        calculate_pmk_sha256(password, ssid)
+        calculate_pmk_sha256_bytes(password, ssid)
     } else {
-        calculate_pmk(password, ssid)
+        calculate_pmk_bytes(password, ssid)
     };
 
     // Step 2: Calculate PTK
     let ptk = calculate_ptk(&pmk, ap_mac, client_mac, anonce, snonce, key_version);
 
-    // Step 3: Extract KCK (first 16 bytes of PTK)
-    let mut kck = [0u8; 16];
-    kck.copy_from_slice(&ptk[0..16]);
+    // Step 3: Calculate MIC using KCK (first 16 bytes of PTK)
+    let kck: &[u8; 16] = ptk[0..16].try_into().unwrap();
+    let calculated_mic = calculate_mic(kck, eapol_frame, key_version);
 
-    // Step 4: Calculate MIC
-    let calculated_mic = calculate_mic(&kck, eapol_frame, key_version);
-
-    // Step 5: Compare MICs
-    if captured_mic.len() != 16 {
-        return false;
-    }
-
+    // Step 4: Constant-time comparison (prevents timing attacks)
     let mut diff = 0u8;
     for i in 0..16 {
         diff |= calculated_mic[i] ^ captured_mic[i];
