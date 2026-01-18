@@ -15,10 +15,6 @@ use brutifi::{scan_networks, WifiNetwork};
 #[derive(Debug, Clone)]
 pub enum ScanResult {
     Success(Vec<WifiNetwork>),
-    PartialSuccess {
-        networks: Vec<WifiNetwork>,
-        warning: String,
-    },
     Error(String),
 }
 
@@ -105,19 +101,9 @@ pub fn scan_networks_async(interface: String) -> ScanResult {
             if networks.is_empty() {
                 ScanResult::Error("No networks found".to_string())
             } else {
-                // Compact duplicate networks (same SSID, different channels/BSSIDs)
+                // Compact duplicate networks (same SSID, different channels)
                 let compacted_networks = brutifi::compact_duplicate_networks(networks);
-
-                // Check if BSSIDs are missing (Location Services issue)
-                let has_bssids = compacted_networks.iter().any(|n| !n.bssid.is_empty());
-                if !has_bssids {
-                    ScanResult::PartialSuccess {
-                        networks: compacted_networks,
-                        warning: "Location Services permission required to access WiFi BSSIDs. Enable it in System Settings > Privacy & Security > Location Services.".to_string()
-                    }
-                } else {
-                    ScanResult::Success(compacted_networks)
-                }
+                ScanResult::Success(compacted_networks)
             }
         }
         Err(e) => ScanResult::Error(e.to_string()),
@@ -129,7 +115,6 @@ pub struct CaptureParams {
     pub interface: String,
     pub channel: Option<u32>,
     pub ssid: Option<String>,
-    pub bssid: Option<String>,
     pub output_file: String,
 }
 
@@ -150,7 +135,6 @@ pub async fn capture_async(
     let output_file = params.output_file.clone();
     let interface = params.interface.clone();
     let ssid = params.ssid.clone();
-    let bssid = params.bssid.clone();
 
     // Pre-flight checks
     let _ = progress_tx.send(CaptureProgress::Log(format!(
@@ -213,7 +197,7 @@ pub async fn capture_async(
             interface: &interface,
             channel: params.channel,
             ssid: ssid.as_deref(),
-            bssid: bssid.as_deref(),
+            bssid: None,
             output_file: &params.output_file,
             duration: None,  // Run until stopped
             no_deauth: true, // macOS doesn't support deauth

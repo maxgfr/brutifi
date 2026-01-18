@@ -14,11 +14,12 @@ A high-performance, cross-platform desktop GUI application for testing WPA/WPA2 
 ## ✨ Features
 
 ### Core Capabilities
+
 - 🖥️ **Modern Desktop GUI** - Built with Iced framework for smooth, native experience
 - 🚀 **Dual Cracking Engines**:
   - **Native CPU**: Custom PBKDF2 implementation with Rayon parallelism (~10K-100K passwords/sec)
   - **Hashcat GPU**: 10-100x faster acceleration with automatic device detection
-- 📡 **WiFi Network Scanning** - Real-time discovery with BSSID/channel detection
+- 📡 **WiFi Network Scanning** - Real-time discovery with channel detection
 - 🎯 **Handshake Capture** - EAPOL frame analysis with visual progress indicators
 - 🔑 **Dual Attack Modes**:
   - 🔢 Numeric bruteforce (PIN codes: 8-12 digits)
@@ -27,7 +28,7 @@ A high-performance, cross-platform desktop GUI application for testing WPA/WPA2 
 - 🔒 **100% Offline** - No data transmitted anywhere
 
 ### Platform Support
-- 🍎 **macOS Native** - Automatic Location Services integration, Apple Silicon support
+- 🍎 **macOS Native** - Apple Silicon support
 - 🪟 **Windows Ready** - Full Npcap support
 - 🐧 **Linux Compatible** - libpcap integration
 
@@ -39,26 +40,20 @@ A high-performance, cross-platform desktop GUI application for testing WPA/WPA2 
 
 ```bash
 # Apple Silicon (M1/M2/M3/M4) - Recommended
-curl -LO https://github.com/maxgfr/bruteforce-wifi/releases/latest/download/WiFi-Bruteforce-macOS-arm64.dmg
+curl -LO https://github.com/maxgfr/bruteforce-wifi/releases/latest/download/BrutiFi-*-macOS-arm64.dmg
 
 # Intel x86_64
-curl -LO https://github.com/maxgfr/bruteforce-wifi/releases/latest/download/WiFi-Bruteforce-macOS-x86_64.dmg
+curl -LO https://github.com/maxgfr/bruteforce-wifi/releases/latest/download/BrutiFi-*-macOS-x86_64.dmg
 ```
 
-#### Running Unsigned Applications
+#### Running from the DMG
 
-Since this app is not signed with an Apple Developer certificate:
-
-1. **First launch attempt**: Right-click (or Control-click) the app → Select "Open"
-2. **If you see "damaged" error**:
-
-   ```bash
-   # Remove quarantine attribute
-   xattr -d com.apple.quarantine /Applications/WiFi-Bruteforce.app
-   
-   # If that doesn't work, remove all extended attributes
-   xattr -cr /Applications/WiFi-Bruteforce.app
-   ```
+```bash
+hdiutil attach BrutiFi-*-macOS-*.dmg
+cp -R "/Volumes/BrutiFi/BrutiFi.app" /Applications/BrutiFi.app
+xattr -dr com.apple.quarantine /Applications/BrutiFi.app
+sudo /Applications/BrutiFi.app/Contents/MacOS/brutifi
+```
 
 #### Build from Source (Recommended for Development)
 
@@ -67,15 +62,9 @@ git clone https://github.com/maxgfr/bruteforce-wifi.git
 cd bruteforce-wifi
 cargo build --release
 
-# Create a proper .app bundle
-./macos/build-app.sh
-open "target/release/WiFi Bruteforce.app"
+# Run locally
+sudo ./target/release/brutifi
 ```
-
-The included `macos/build-app.sh` script creates a proper macOS app bundle with:
-- Automatic sudo privilege request
-- Location Services permission prompts
-- Launcher that handles permissions gracefully
 
 ### Windows
 
@@ -114,7 +103,7 @@ cargo build --release
 
 ### Complete Workflow
 
-```
+```text
 1. Scan Networks → 2. Select Target → 3. Capture Handshake → 4. Crack Password
 ```
 
@@ -123,18 +112,16 @@ cargo build --release
 Launch the app and click "Scan Networks" to discover nearby WiFi networks:
 
 - **SSID** (network name)
-- **BSSID** (MAC address)
 - **Channel number**
 - **Signal strength**
 - **Security type** (WPA/WPA2)
-
-> **macOS Note**: Scanning requires Location Services permission, NOT root privileges.
 
 ### Step 2: Select & Capture Handshake
 
 Select a network → Click "Continue to Capture"
 
 **Before capturing:**
+
 1. **Choose output location**: Click "Choose Location" to save the .pcap file
    - Default: `capture.pcap` in current directory
    - Recommended: Save to Documents or Desktop for easy access
@@ -157,14 +144,17 @@ The app monitors for the WPA/WPA2 4-way handshake:
 Navigate to "Crack" tab:
 
 #### Engine Selection
+
 - **Native CPU**: Software-only cracking, works everywhere
 - **Hashcat GPU**: Requires hashcat + hcxtools installed, 10-100x faster
 
 #### Attack Methods
+
 - **Numeric Attack**: Tests PIN codes (e.g., 00000000-99999999)
 - **Wordlist Attack**: Tests passwords from files like rockyou.txt
 
 #### Real-time Stats
+
 - Progress bar with percentage
 - Current attempts / Total
 - Passwords per second
@@ -232,15 +222,19 @@ These tools demonstrated the feasibility of offline WPA/WPA2 password attacks an
 
 ### Disclaimer
 
-**THIS TOOL IS FOR EDUCATIONAL AND AUTHORIZED TESTING ONLY**
+#### Educational Use Only
+
+This tool is for educational and authorized testing only.
 
 ✅ **Legal Uses:**
+
 - Testing your own WiFi network security
 - Authorized penetration testing with written permission
 - Security research and education
 - CTF competitions and challenges
 
 ❌ **Illegal Activities:**
+
 - Unauthorized access to networks you don't own
 - Intercepting communications without permission
 - Any malicious or unauthorized use

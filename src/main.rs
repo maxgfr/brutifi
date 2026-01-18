@@ -29,77 +29,6 @@ fn is_root() -> bool {
     false
 }
 
-/// Request location services permission on macOS
-/// Returns true if permission was granted or already available
-#[cfg(target_os = "macos")]
-fn check_and_request_location_permission() -> bool {
-    use std::process::Command;
-
-    // Simple check script - just checks status without blocking
-    let check_script = r#"
-import CoreLocation
-import Foundation
-
-let manager = CLLocationManager()
-let status = manager.authorizationStatus
-
-switch status {
-case .authorizedAlways, .authorizedWhenInUse:
-    print("granted")
-case .denied, .restricted:
-    print("denied")
-case .notDetermined:
-    print("undetermined")
-@unknown default:
-    print("unknown")
-}
-"#;
-
-    let script_path = "/tmp/wifi_check_location.swift";
-    if std::fs::write(script_path, check_script).is_err() {
-        eprintln!("Warning: Could not write location check script");
-        return false;
-    }
-
-    match Command::new("swift").arg(script_path).output() {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let status = stdout.trim();
-
-            match status {
-                "granted" => {
-                    eprintln!("Location Services: Authorized");
-                    true
-                }
-                "denied" => {
-                    eprintln!("\nLocation Services: DENIED");
-                    eprintln!("Please enable Location Services for this app:");
-                    eprintln!("  System Settings > Privacy & Security > Location Services");
-                    eprintln!("  Then restart the application.\n");
-                    false
-                }
-                "undetermined" => {
-                    eprintln!("Location Services: Not yet determined");
-                    eprintln!("The app will request permission when scanning networks.\n");
-                    true // Will be requested during scan
-                }
-                _ => {
-                    eprintln!("Location Services: Unknown status ({})", status);
-                    true // Try anyway
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("Warning: Could not check location permission: {}", e);
-            true // Try anyway
-        }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn check_and_request_location_permission() -> bool {
-    true // Not needed on non-macOS platforms
-}
 
 /// Setup panic handler to show errors instead of silent exit
 fn setup_panic_handler() {
@@ -144,17 +73,11 @@ fn main() -> iced::Result {
     eprintln!("\nBrutyFi v{}", env!("CARGO_PKG_VERSION"));
     eprintln!("================================\n");
 
-    // Check location services (macOS) - this is more important than root for scanning
-    let _has_location = check_and_request_location_permission();
-
     // macOS-specific guidance
     #[cfg(target_os = "macos")]
     {
         eprintln!("macOS Permission Guide:");
         eprintln!("------------------------");
-        eprintln!("  Scanning: Requires Location Services (NOT root)");
-        eprintln!("            Enable in: System Settings > Privacy > Location Services");
-        eprintln!();
         eprintln!("  Capture:  Requires root (sudo) for monitor mode");
         eprintln!("            Note: Apple Silicon Macs have limited capture support");
         eprintln!();

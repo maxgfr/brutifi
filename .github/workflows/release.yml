@@ -77,34 +77,52 @@ jobs:
           RUSTFLAGS: >
             ${{ matrix.target == 'aarch64-apple-darwin' && '-C target-cpu=apple-m1' || '-C target-cpu=x86-64-v3' }}
 
-      - name: Create macOS App Bundle
+      - name: Create macOS App Bundle (ad-hoc signed)
         run: |
           APP_NAME="BrutiFi"
           VERSION="${{ needs.release.outputs.new_release_version }}"
           if [ -z "$VERSION" ]; then VERSION="0.0.0-dev.${{ github.run_number }}"; fi
           TARGET="${{ matrix.target }}"
 
-          # Copy binary to release directory for the build script
-          mkdir -p target/release
-          cp "target/${TARGET}/release/brutifi" "target/release/brutifi"
+          APP_DIR="target/release/${APP_NAME}.app"
+          CONTENTS_DIR="${APP_DIR}/Contents"
+          MACOS_DIR="${CONTENTS_DIR}/MacOS"
 
-          # Use our build script
-          chmod +x macos/build-app.sh
-          ./macos/build-app.sh
+          rm -rf "${APP_DIR}"
+          mkdir -p "${MACOS_DIR}"
 
-          # Update version in Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "target/release/${APP_NAME}.app/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "target/release/${APP_NAME}.app/Contents/Info.plist"
+          cp "target/${TARGET}/release/brutifi" "${MACOS_DIR}/brutifi"
+          chmod +x "${MACOS_DIR}/brutifi"
 
-      - name: Sign the app bundle using apple-code-sign-action
-        uses: indygreg/apple-code-sign-action@v1
-        with:
-          input_path: "target/release/BrutiFi.app"
-          output_path: "target/release/BrutiFi.app"
+            cat << 'EOF' | sed 's/^          //' > "${CONTENTS_DIR}/Info.plist"
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+              <key>CFBundleExecutable</key>
+              <string>brutifi</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.maxgfr.brutifi</string>
+              <key>CFBundleName</key>
+              <string>${APP_NAME}</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${VERSION}</string>
+              <key>CFBundleVersion</key>
+              <string>${VERSION}</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>10.15</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+            </dict>
+            </plist>
+            EOF
+
+          codesign --force --deep --sign - "${APP_DIR}"
 
       - name: Create DMG
         run: |
-          APP_NAME="BrutiFi"
           VERSION="${{ needs.release.outputs.new_release_version }}"
           if [ -z "$VERSION" ]; then VERSION="0.0.0-dev.${{ github.run_number }}"; fi
           TARGET="${{ matrix.target }}"
@@ -113,20 +131,18 @@ jobs:
           DMG_TEMP="dmg_temp"
 
           mkdir -p "${DMG_TEMP}"
-          cp -R "target/release/${APP_NAME}.app" "${DMG_TEMP}/"
+          cp -R "target/release/BrutiFi.app" "${DMG_TEMP}/BrutiFi.app"
           ln -s /Applications "${DMG_TEMP}/Applications"
 
           echo "BrutiFi v${VERSION}" > "${DMG_TEMP}/README.txt"
           echo "" >> "${DMG_TEMP}/README.txt"
           echo "Installation:" >> "${DMG_TEMP}/README.txt"
           echo "1. Drag 'BrutiFi.app' to Applications folder" >> "${DMG_TEMP}/README.txt"
-          echo "2. Double-click to launch" >> "${DMG_TEMP}/README.txt"
-          echo "3. Grant Location Services permission when prompted" >> "${DMG_TEMP}/README.txt"
-          echo "4. Enter your password when prompted for admin privileges" >> "${DMG_TEMP}/README.txt"
+          echo "2. Run: sudo /Applications/BrutiFi.app/Contents/MacOS/brutifi" >> "${DMG_TEMP}/README.txt"
           echo "" >> "${DMG_TEMP}/README.txt"
           echo "For more information: https://github.com/maxgfr/bruteforce-wifi" >> "${DMG_TEMP}/README.txt"
 
-          hdiutil create -volname "${APP_NAME}" \
+          hdiutil create -volname "BrutiFi" \
             -srcfolder "${DMG_TEMP}" \
             -ov \
             -format UDZO \

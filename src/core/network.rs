@@ -56,7 +56,7 @@ pub struct WifiNetwork {
 
 impl std::fmt::Display for WifiNetwork {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Show channels if multiple BSSIDs exist for same SSID
+        // Show channels if multiple AP addresses exist for same SSID
         if self.channel.contains(',') {
             write!(f, "{} (Channels: {})", self.ssid, self.channel)
         } else {
@@ -65,7 +65,7 @@ impl std::fmt::Display for WifiNetwork {
     }
 }
 
-/// Compact duplicate networks (same SSID, different BSSIDs/channels)
+/// Compact duplicate networks (same SSID, different AP addresses/channels)
 /// This is common with:
 /// - Mesh networks
 /// - Routers with multiple radios (2.4GHz + 5GHz)
@@ -98,10 +98,10 @@ pub fn compact_duplicate_networks(networks: Vec<WifiNetwork>) -> Vec<WifiNetwork
                 b_rssi.cmp(&a_rssi) // Higher (less negative) is better
             });
 
-            // Use the strongest signal's BSSID as primary
+            // Use the strongest signal's AP address as primary
             let primary = networks[0].clone();
 
-            // Collect all channels and BSSIDs
+            // Collect all channels and AP addresses
             let mut channels = Vec::new();
             let mut bssids = Vec::new();
 
@@ -149,60 +149,8 @@ pub fn scan_networks(interface: &str) -> Result<Vec<WifiNetwork>> {
     // First, try our Embedded Swift Scanner (most reliable on modern macOS)
     if let Ok(networks) = scan_networks_swift() {
         if !networks.is_empty() {
-            // Check if we got BSSIDs or if they're all empty (privacy restriction)
-            let has_bssids = networks.iter().any(|n| !n.bssid.is_empty());
-
-            if has_bssids {
-                // Compact duplicate networks (same SSID, multiple BSSIDs/channels)
-                let compacted = compact_duplicate_networks(networks);
-                return Ok(compacted);
-            }
-
-            // BSSIDs are missing due to macOS privacy restrictions
-            // On modern macOS (especially Apple Silicon), monitor mode is disabled at firmware level
-            // The ONLY working solution is Location Services
-            println!();
-            println!(
-                "{}",
-                "❌ BSSID Information Blocked by macOS Privacy Settings"
-            );
-            println!();
-            println!(
-                "{}",
-                "macOS 10.15+ requires Location Services permission to access WiFi BSSIDs."
-            );
-            println!("{}", "Without BSSIDs, you CANNOT capture handshakes!");
-            println!();
-            println!("{}", "💡 Why this happens:");
-            println!(
-                "{}",
-                "  • Apple considers WiFi BSSIDs as location data (can track your position)"
-            );
-            println!(
-                "{}",
-                "  • Monitor mode is disabled on Apple Silicon (M1/M2/M3)"
-            );
-            println!("{}", "  • sudo doesn't bypass privacy restrictions");
-            println!();
-            println!("{}", "🔧 FIX (takes 30 seconds):");
-            println!();
-            println!(
-                "{}",
-                "  1. Open  → System Settings → Privacy & Security → Location Services"
-            );
-            println!("{}", "  2. Find the app in the list and CHECK the box");
-            println!("{}", "  3. Quit the app completely (Cmd+Q) and reopen it");
-            println!("{}", "  4. Run this scan again (without sudo)");
-            println!();
-            println!(
-                "📖 Full guide: {}/MACOS_SETUP.md",
-                env!("CARGO_MANIFEST_DIR")
-            );
-            println!();
-            println!("{}", "⚠️  Returning partial scan results (no BSSIDs)...");
-            println!();
-
-            return Ok(networks);
+            let compacted = compact_duplicate_networks(networks);
+            return Ok(compacted);
         }
     }
 
@@ -229,7 +177,7 @@ pub fn scan_networks(interface: &str) -> Result<Vec<WifiNetwork>> {
 fn parse_airport_output(output: &str) -> Result<Vec<WifiNetwork>> {
     let mut networks = Vec::new();
 
-    // Header: SSID BSSID RSSI CHANNEL HT CC SECURITY ...
+    // Header: SSID AP RSSI CHANNEL HT CC SECURITY ...
     let bssid_re = Regex::new(r"([0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2})").unwrap();
 
     let lines: Vec<&str> = output.lines().collect();
@@ -242,7 +190,7 @@ fn parse_airport_output(output: &str) -> Result<Vec<WifiNetwork>> {
 
         if let Some(mat) = bssid_re.find(line) {
             let bssid = mat.as_str().to_string();
-            let ssid = line[0..mat.start()].trim().to_string(); // SSID is left of BSSID
+            let ssid = line[0..mat.start()].trim().to_string(); // SSID is left of AP address
 
             let remainder = &line[mat.end()..]; // Right of BSSID
                                                 // Format: RSSI CHANNEL HT CC SECURITY ...

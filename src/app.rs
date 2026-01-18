@@ -150,7 +150,6 @@ impl BruteforceApp {
             Message::StartScan => {
                 self.scan_capture_screen.is_scanning = true;
                 self.scan_capture_screen.error_message = None;
-                self.scan_capture_screen.location_services_warning = false;
 
                 let interface = self.interface.clone();
                 Task::perform(
@@ -172,12 +171,6 @@ impl BruteforceApp {
                     ScanResult::Success(networks) => {
                         self.scan_capture_screen.networks = networks;
                         self.scan_capture_screen.selected_network = None;
-                    }
-                    ScanResult::PartialSuccess { networks, warning } => {
-                        self.scan_capture_screen.networks = networks;
-                        self.scan_capture_screen.selected_network = None;
-                        self.scan_capture_screen.location_services_warning = true;
-                        self.scan_capture_screen.error_message = Some(warning);
                     }
                     ScanResult::Error(msg) => {
                         self.scan_capture_screen.error_message = Some(msg);
@@ -307,11 +300,6 @@ impl BruteforceApp {
                         interface: self.interface.clone(),
                         channel,
                         ssid: Some(network.ssid.clone()),
-                        bssid: if !network.bssid.is_empty() {
-                            Some(network.bssid.clone())
-                        } else {
-                            None
-                        },
                         output_file: self.scan_capture_screen.output_file.clone(),
                     };
 

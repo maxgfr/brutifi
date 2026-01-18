@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 /// WPA/WPA2 4-way handshake data structure
 ///
 /// Contains all necessary information to bruteforce a WPA/WPA2 password offline:
-/// - SSID and BSSID (network identifiers)
+/// - SSID and AP address (network identifiers)
 /// - AP and client MAC addresses
 /// - ANonce and SNonce (random nonces from the handshake)
 /// - MIC (Message Integrity Code to verify password)
@@ -21,7 +21,7 @@ pub struct Handshake {
     /// Network SSID (used in PMK derivation)
     pub ssid: String,
 
-    /// AP MAC address (BSSID)
+    /// AP MAC address
     pub ap_mac: [u8; 6],
 
     /// Client/Station MAC address
@@ -74,7 +74,7 @@ pub fn parse_cap_file(path: &std::path::Path, ssid: Option<&str>) -> Result<Hand
             eapol_packets.push(eapol);
         }
 
-        // Try to extract SSID and BSSID from Beacon
+        // Try to extract SSID and AP address from Beacon
         if let Some((bssid, extracted_ssid)) = extract_bssid_ssid_from_beacon(packet.data) {
             bssid_ssid_map.insert(bssid, extracted_ssid);
         }
@@ -88,7 +88,7 @@ pub fn parse_cap_file(path: &std::path::Path, ssid: Option<&str>) -> Result<Hand
     build_handshake_from_eapol(&eapol_packets, ssid, &bssid_ssid_map)
 }
 
-/// Extract BSSID and SSID from Beacon frame
+/// Extract AP address and SSID from Beacon frame
 fn extract_bssid_ssid_from_beacon(data: &[u8]) -> Option<([u8; 6], String)> {
     // Skip radiotap
     if data.len() < 50 {
@@ -118,7 +118,7 @@ fn extract_bssid_ssid_from_beacon(data: &[u8]) -> Option<([u8; 6], String)> {
         return None;
     }
 
-    // BSSID is Addr3 (offset 16)
+    // AP address is Addr3 (offset 16)
     let bssid: [u8; 6] = frame[16..22].try_into().ok()?;
 
     // Body starts at 24 (Header) + 12 (Fixed Params) = 36
@@ -200,8 +200,8 @@ pub fn extract_eapol_from_packet(data: &[u8]) -> Option<EapolPacket> {
 
     // Determine AP and client MAC based on ToDS/FromDS flags
     // Infrastructure mode (STA <-> AP):
-    // - FromDS=1, ToDS=0 (AP → STA/M1,M3): Addr1=Client, Addr2=BSSID(AP), Addr3=SA(AP)
-    // - FromDS=0, ToDS=1 (STA → AP/M2,M4): Addr1=BSSID(AP), Addr2=Client, Addr3=DA(AP)
+    // - FromDS=1, ToDS=0 (AP → STA/M1,M3): Addr1=Client, Addr2=AP, Addr3=SA(AP)
+    // - FromDS=0, ToDS=1 (STA → AP/M2,M4): Addr1=AP, Addr2=Client, Addr3=DA(AP)
     let (ap_mac, client_mac) = match (to_ds, from_ds) {
         (false, true) => (addr2, addr1), // AP → Client (M1, M3)
         (true, false) => (addr1, addr2), // Client → AP (M2, M4)
@@ -393,7 +393,7 @@ fn build_handshake_from_eapol(
             // Determine SSID
             // Priority:
             // 1. SSID provided by user (forces override)
-            // 2. SSID found in beacon matching BSSID
+            // 2. SSID found in beacon matching AP address
             // 3. Error
 
             let ssid_str = if let Some(s) = ssid {

@@ -34,7 +34,6 @@ pub struct ScanCaptureScreen {
     pub networks: Vec<WifiNetwork>,
     pub selected_network: Option<usize>,
     pub is_scanning: bool,
-    pub location_services_warning: bool,
 
     // Capture state
     pub target_network: Option<WifiNetwork>,
@@ -57,7 +56,6 @@ impl Default for ScanCaptureScreen {
             networks: Vec::new(),
             selected_network: None,
             is_scanning: false,
-            location_services_warning: false,
             target_network: None,
             interface: "en0".to_string(),
             output_file: "/tmp/capture.pcap".to_string(),
@@ -115,31 +113,6 @@ impl ScanCaptureScreen {
         };
 
         let header = row![title, horizontal_space(), scan_btn,].align_y(iced::Alignment::Center);
-
-        // Location Services Warning (compact)
-        let location_warning = if self.location_services_warning {
-            Some(
-                container(
-                    text("Location Services required for BSSIDs")
-                        .size(11)
-                        .color(colors::WARNING),
-                )
-                .padding([6, 10])
-                .style(|_| container::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        0.95, 0.77, 0.06, 0.15,
-                    ))),
-                    border: iced::Border {
-                        color: colors::WARNING,
-                        width: 1.0,
-                        radius: 4.0.into(),
-                    },
-                    ..Default::default()
-                }),
-            )
-        } else {
-            None
-        };
 
         // Network list
         let network_list: Element<Message> = if self.networks.is_empty() {
@@ -250,10 +223,6 @@ impl ScanCaptureScreen {
 
         let mut content = column![header,].spacing(10);
 
-        if let Some(warning) = location_warning {
-            content = content.push(warning);
-        }
-
         content = content.push(
             container(network_list)
                 .height(Length::Fill)
@@ -300,16 +269,6 @@ impl ScanCaptureScreen {
                         row![
                             text("SSID: ").size(11).color(colors::TEXT_DIM),
                             text(&network.ssid).size(11).color(colors::TEXT),
-                        ],
-                        row![
-                            text("BSSID: ").size(11).color(colors::TEXT_DIM),
-                            text(if network.bssid.is_empty() {
-                                "Hidden"
-                            } else {
-                                &network.bssid
-                            })
-                            .size(11)
-                            .color(colors::TEXT),
                         ],
                         row![
                             text("Channel: ").size(11).color(colors::TEXT_DIM),
