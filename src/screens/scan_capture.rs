@@ -52,7 +52,6 @@ pub struct ScanCaptureScreen {
 
     // Shared
     pub error_message: Option<String>,
-    #[allow(dead_code)]
     pub log_messages: Vec<String>,
 }
 
@@ -299,150 +298,144 @@ impl ScanCaptureScreen {
 
         // Target info
         let target_info = self.target_network.as_ref().map(|network| {
-            container(
-                column![
-                    row![
-                        text("SSID: ").size(11).color(colors::TEXT_DIM),
-                        text(&network.ssid).size(11).color(colors::TEXT),
-                    ],
-                    row![
-                        text("BSSID: ").size(11).color(colors::TEXT_DIM),
-                        text(if network.bssid.is_empty() {
-                            "Hidden"
-                        } else {
-                            &network.bssid
-                        })
-                        .size(11)
-                        .color(colors::TEXT),
-                    ],
-                    row![
-                        text("Channel: ").size(11).color(colors::TEXT_DIM),
-                        text(&network.channel).size(11).color(colors::TEXT),
-                        text(" | Security: ").size(11).color(colors::TEXT_DIM),
-                        text(&network.security).size(11).color(colors::PRIMARY),
-                    ],
-                ]
-                .spacing(2),
-            )
-            .padding(10)
-            .style(theme::card_style)
+            column![
+                container(
+                    column![
+                        row![
+                            text("SSID: ").size(11).color(colors::TEXT_DIM),
+                            text(&network.ssid).size(11).color(colors::TEXT),
+                        ],
+                        row![
+                            text("BSSID: ").size(11).color(colors::TEXT_DIM),
+                            text(if network.bssid.is_empty() {
+                                "Hidden"
+                            } else {
+                                &network.bssid
+                            })
+                            .size(11)
+                            .color(colors::TEXT),
+                        ],
+                        row![
+                            text("Channel: ").size(11).color(colors::TEXT_DIM),
+                            text(&network.channel).size(11).color(colors::TEXT),
+                            text(" | Security: ").size(11).color(colors::TEXT_DIM),
+                            text(&network.security).size(11).color(colors::PRIMARY),
+                        ],
+                    ]
+                    .spacing(2),
+                )
+                .padding(10)
+                .style(theme::card_style),
+                // Output file selector right after network info
+                container(
+                    column![
+                        text("Capture Output File").size(12).color(colors::TEXT),
+                        text("This is where the handshake will be saved (.cap file)")
+                            .size(10)
+                            .color(colors::TEXT_DIM),
+                        row![text(&self.output_file).size(11).color(colors::SUCCESS),].spacing(5),
+                        button(text("Choose Location").size(12))
+                            .padding([6, 12])
+                            .style(theme::secondary_button_style)
+                            .on_press(Message::BrowseCaptureFile),
+                    ]
+                    .spacing(6),
+                )
+                .padding(10)
+                .style(theme::card_style),
+            ]
+            .spacing(10)
         });
 
-        // Handshake progress (compact)
+        // Handshake progress (simplified)
         let handshake_status = {
             let hp = &self.handshake_progress;
 
-            let step_style = |received: bool| {
-                move |_: &_| container::Style {
-                    background: Some(iced::Background::Color(if received {
-                        iced::Color::from_rgba(0.18, 0.80, 0.44, 0.2)
-                    } else {
-                        colors::SURFACE
-                    })),
+            // Big success message when handshake is captured
+            if self.handshake_complete || hp.is_complete() {
+                container(
+                    column![
+                        row![
+                            text("✅").size(24),
+                            text(" Handshake Captured Successfully!")
+                                .size(16)
+                                .color(colors::SUCCESS),
+                        ]
+                        .spacing(8)
+                        .align_y(iced::Alignment::Center),
+                        text("The .cap file contains the WPA handshake.")
+                            .size(11)
+                            .color(colors::TEXT_DIM),
+                        text("You can now crack the password.")
+                            .size(11)
+                            .color(colors::TEXT_DIM),
+                    ]
+                    .spacing(4),
+                )
+                .padding(15)
+                .width(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.18, 0.80, 0.44, 0.2,
+                    ))),
                     border: iced::Border {
-                        color: if received {
-                            colors::SUCCESS
-                        } else {
-                            colors::BORDER
-                        },
-                        width: 1.0,
-                        radius: 4.0.into(),
+                        color: colors::SUCCESS,
+                        width: 2.0,
+                        radius: 8.0.into(),
                     },
                     ..Default::default()
-                }
-            };
-
-            let m1_color = if hp.m1_received {
-                colors::SUCCESS
-            } else {
-                colors::TEXT_DIM
-            };
-            let m2_color = if hp.m2_received {
-                colors::SUCCESS
-            } else {
-                colors::TEXT_DIM
-            };
-            let m3_color = if hp.m3_received {
-                colors::SUCCESS
-            } else {
-                colors::TEXT_DIM
-            };
-            let m4_color = if hp.m4_received {
-                colors::SUCCESS
-            } else {
-                colors::TEXT_DIM
-            };
-
-            let status_text = if self.handshake_complete {
-                text("Handshake captured!").size(12).color(colors::SUCCESS)
-            } else if hp.is_complete() {
-                text("M1+M2 ready for cracking!")
-                    .size(12)
-                    .color(colors::SUCCESS)
-            } else {
-                text("Waiting for handshake...")
-                    .size(12)
-                    .color(colors::TEXT_DIM)
-            };
-
-            container(
-                column![
-                    text("4-Way Handshake").size(11).color(colors::TEXT_DIM),
-                    row![
-                        container(text("M1").size(12).color(m1_color))
-                            .padding([6, 10])
-                            .style(step_style(hp.m1_received)),
-                        text("→").size(14).color(colors::TEXT_DIM),
-                        container(text("M2").size(12).color(m2_color))
-                            .padding([6, 10])
-                            .style(step_style(hp.m2_received)),
-                        text("→").size(14).color(colors::TEXT_DIM),
-                        container(text("M3").size(12).color(m3_color))
-                            .padding([6, 10])
-                            .style(step_style(hp.m3_received)),
-                        text("→").size(14).color(colors::TEXT_DIM),
-                        container(text("M4").size(12).color(m4_color))
-                            .padding([6, 10])
-                            .style(step_style(hp.m4_received)),
+                })
+            } else if self.is_capturing {
+                // Simple progress indicator while capturing
+                container(
+                    column![
+                        row![
+                            text("🔍").size(14),
+                            text(" Listening for handshake...")
+                                .size(12)
+                                .color(colors::TEXT),
+                        ]
+                        .spacing(6),
+                        row![
+                            if hp.m1_received {
+                                text("✅ M1")
+                            } else {
+                                text("⏳ M1")
+                            }
+                            .size(10)
+                            .color(if hp.m1_received {
+                                colors::SUCCESS
+                            } else {
+                                colors::TEXT_DIM
+                            }),
+                            if hp.m2_received {
+                                text("✅ M2")
+                            } else {
+                                text("⏳ M2")
+                            }
+                            .size(10)
+                            .color(if hp.m2_received {
+                                colors::SUCCESS
+                            } else {
+                                colors::TEXT_DIM
+                            }),
+                        ]
+                        .spacing(10),
                     ]
-                    .spacing(6)
-                    .align_y(iced::Alignment::Center),
-                    status_text,
-                ]
-                .spacing(8),
-            )
-            .padding(10)
-            .style(theme::card_style)
-        };
-
-        // Capture status
-        let capture_status = if self.is_capturing {
-            container(
-                row![
-                    text("Capturing...").size(12).color(colors::SUCCESS),
-                    horizontal_space(),
-                    text(format!("{} packets", self.packets_captured))
-                        .size(12)
-                        .color(colors::TEXT),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .padding(10)
-            .style(|_| container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    0.18, 0.80, 0.44, 0.1,
-                ))),
-                border: iced::Border {
-                    color: colors::SUCCESS,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
-                ..Default::default()
-            })
-        } else {
-            container(text("Ready to capture").size(12).color(colors::TEXT_DIM))
+                    .spacing(6),
+                )
                 .padding(10)
                 .style(theme::card_style)
+            } else {
+                // Waiting to start
+                container(
+                    text("Click 'Start Capture' to begin")
+                        .size(11)
+                        .color(colors::TEXT_DIM),
+                )
+                .padding(10)
+                .style(theme::card_style)
+            }
         };
 
         // Error display
@@ -462,59 +455,40 @@ impl ScanCaptureScreen {
                 })
         });
 
-        // Instructions (compact)
-        let instructions = container(
-            column![
-                text("How to capture:").size(11).color(colors::TEXT),
-                text("1. macOS: Disconnect from WiFi (Option+Click Wifi -> Disconnect)")
-                    .size(10)
-                    .color(colors::WARNING),
-                text("2. Choose output file location")
-                    .size(10)
-                    .color(colors::TEXT_DIM),
-                text("3. Start capture below")
-                    .size(10)
-                    .color(colors::TEXT_DIM),
-                text("4. On another device, reconnect to the network")
-                    .size(10)
-                    .color(colors::TEXT_DIM),
-                text("5. Handshake will be captured automatically")
-                    .size(10)
-                    .color(colors::TEXT_DIM),
-            ]
-            .spacing(2),
-        )
-        .padding(10)
-        .style(|_| container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                0.5, 0.5, 0.5, 0.1,
-            ))),
-            border: iced::Border {
-                color: colors::BORDER,
-                width: 1.0,
-                radius: 4.0.into(),
-            },
-            ..Default::default()
-        });
-
-        // Output file selector
-        let output_file_section: Element<Message> = container(
-            column![
-                row![
-                    text("Output: ").size(11).color(colors::TEXT_DIM),
-                    text(&self.output_file).size(11).color(colors::TEXT),
-                ]
-                .spacing(5),
-                button(text("Choose Location").size(12))
-                    .padding([6, 12])
-                    .style(theme::secondary_button_style)
-                    .on_press(Message::BrowseCaptureFile),
-            ]
-            .spacing(8),
-        )
-        .padding(10)
-        .style(theme::card_style)
-        .into();
+        // Instructions (simplified)
+        let instructions = if !self.is_capturing && !self.handshake_complete {
+            Some(
+                container(
+                    column![
+                        text("💡 Quick start:").size(11).color(colors::TEXT),
+                        text("1. Disconnect from WiFi (macOS: Option+Click WiFi → Disconnect)")
+                            .size(10)
+                            .color(colors::TEXT_DIM),
+                        text("2. Click Start Capture below")
+                            .size(10)
+                            .color(colors::TEXT_DIM),
+                        text("3. Reconnect a device to the network")
+                            .size(10)
+                            .color(colors::TEXT_DIM),
+                    ]
+                    .spacing(2),
+                )
+                .padding(8)
+                .style(|_| container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.5, 0.5, 0.5, 0.05,
+                    ))),
+                    border: iced::Border {
+                        color: colors::BORDER,
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    ..Default::default()
+                }),
+            )
+        } else {
+            None
+        };
 
         // Control buttons
         let capture_btn = if self.is_capturing {
@@ -553,14 +527,50 @@ impl ScanCaptureScreen {
         }
 
         content = content.push(handshake_status);
-        content = content.push(capture_status);
+
+        // Logs panel (show last 5 logs during capture)
+        if self.is_capturing && !self.log_messages.is_empty() {
+            let log_panel = container(
+                column![
+                    text("📜 Capture Logs").size(11).color(colors::TEXT_DIM),
+                    scrollable(
+                        column(
+                            self.log_messages
+                                .iter()
+                                .rev()
+                                .take(8)
+                                .rev()
+                                .map(|msg| { text(msg).size(10).color(colors::TEXT_DIM).into() })
+                                .collect::<Vec<Element<Message>>>(),
+                        )
+                        .spacing(2),
+                    )
+                    .height(Length::Fixed(120.0)),
+                ]
+                .spacing(4),
+            )
+            .padding(8)
+            .style(|_| container::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    0.0, 0.0, 0.0, 0.3,
+                ))),
+                border: iced::Border {
+                    color: colors::BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            });
+            content = content.push(log_panel);
+        }
 
         if let Some(error) = error_display {
             content = content.push(error);
         }
 
-        content = content.push(output_file_section);
-        content = content.push(instructions);
+        if let Some(instr) = instructions {
+            content = content.push(instr);
+        }
 
         let mut button_row = row![capture_btn,].spacing(10);
         if let Some(btn) = continue_btn {

@@ -224,6 +224,7 @@ pub async fn capture_async(
     }
 
     // Run capture in blocking thread
+    let running_clone = state.running.clone();
     let result = tokio::task::spawn_blocking(move || {
         // Build capture options inside the blocking thread
         let options = CaptureOptions {
@@ -234,11 +235,12 @@ pub async fn capture_async(
             output_file: &params.output_file,
             duration: None,  // Run until stopped
             no_deauth: true, // macOS doesn't support deauth
+            running: Some(running_clone), // Pass the state for stopping
         };
 
         // Try to capture, with better error messages
         match bruteforce_wifi::capture_traffic(options) {
-            Ok(()) => Ok(()),
+            Ok(captured_ssid) => Ok(captured_ssid),
             Err(e) => {
                 let error_str = e.to_string();
                 // Provide more helpful error messages
@@ -263,10 +265,20 @@ pub async fn capture_async(
     .await;
 
     match result {
-        Ok(Ok(())) => {
+        Ok(Ok(captured_ssid)) => {
             let _ = progress_tx.send(CaptureProgress::Log(
                 "Capture completed successfully".to_string(),
             ));
+
+            // If we captured a handshake, send HandshakeComplete
+            if let Some(ssid) = captured_ssid {
+                let _ = progress_tx.send(CaptureProgress::HandshakeComplete { ssid: ssid.clone() });
+                let _ = progress_tx.send(CaptureProgress::Log(format!(
+                    "✅ Handshake captured for '{}'",
+                    ssid
+                )));
+            }
+
             CaptureProgress::Finished {
                 output_file,
                 packets: state.packets_count.load(Ordering::Relaxed),

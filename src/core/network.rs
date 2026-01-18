@@ -356,6 +356,7 @@ pub struct CaptureOptions<'a> {
     pub output_file: &'a str,
     pub duration: Option<u64>,
     pub no_deauth: bool,
+    pub running: Option<Arc<AtomicBool>>, // External control for stopping
 }
 
 /// Capture traffic to a file
@@ -363,7 +364,11 @@ pub struct CaptureOptions<'a> {
 /// If `ssid` or `bssid` is provided, it attempts to:
 /// 1. Find the BSSID (AP MAC) from Beacon/ProbeResponse frames
 /// 2. Send deauthentication frames to connected clients to force a handshake (if not disabled)
-pub fn capture_traffic(options: CaptureOptions) -> Result<()> {
+///
+/// Returns Ok(Some(ssid)) if a handshake was successfully captured,
+/// Ok(None) if capture stopped without finding a complete handshake,
+/// or Err() on error.
+pub fn capture_traffic(options: CaptureOptions) -> Result<Option<String>> {
     let interface = options.interface;
     let channel = options.channel;
     let ssid = options.ssid;
@@ -543,13 +548,16 @@ pub fn capture_traffic(options: CaptureOptions) -> Result<()> {
 
     println!("{}", "📡 Opening interface in monitor mode...");
 
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })
-    .ok();
+    // Use external running control if provided, otherwise create a new one
+    let running = options.running.unwrap_or_else(|| {
+        let r = Arc::new(AtomicBool::new(true));
+        let r_clone = r.clone();
+        ctrlc::set_handler(move || {
+            r_clone.store(false, Ordering::SeqCst);
+        })
+        .ok();
+        r
+    });
 
     // Open capture in monitor mode
     let mut cap_builder = Capture::from_device(interface)
@@ -897,6 +905,8 @@ pub fn capture_traffic(options: CaptureOptions) -> Result<()> {
     // CRITICAL: Drop savefile to flush all packets to disk before verification
     drop(savefile);
 
+    let mut captured_ssid: Option<String> = None;
+
     // Verify captured handshake is exploitable
     if let Some(target_ssid) = ssid {
         println!("\n{}", "🔍 Verifying captured handshake...");
@@ -906,45 +916,34 @@ pub fn capture_traffic(options: CaptureOptions) -> Result<()> {
             Ok(handshake) => {
                 // Verify the captured SSID matches the target
                 if handshake.ssid != target_ssid {
-                    println!("❌ Wrong SSID captured: '{}'", handshake.ssid);
-                    println!("   Expected: '{}'", target_ssid);
+                    println!("⚠️  Wrong SSID captured: '{}'", handshake.ssid);
+                    println!("   Expected: '{}', but continuing capture...", target_ssid);
 
-                    // Delete the file
+                    // Delete the file and continue
                     if let Err(e) = std::fs::remove_file(output_file) {
                         println!("⚠️  Failed to delete file: {}", e);
                     } else {
-                        println!("🗑️  Deleted '{}' (wrong SSID)", output_file);
+                        println!("🗑️  Deleted '{}' (wrong SSID, continuing)", output_file);
                     }
 
-                    println!("\n💡 To crack the captured network instead, run:");
-                    println!("  bruteforce-wifi capture --interface en0 --ssid \"{}\" --output capture.pcap", handshake.ssid);
-
-                    return Err(anyhow!(
-                        "Wrong SSID captured: expected '{}', got '{}'",
-                        target_ssid,
-                        handshake.ssid
-                    ));
+                    // Don't return error - just continue capturing
+                    println!("🔄 Continuing capture for '{}'...\n", target_ssid);
+                } else {
+                    println!("✅ Handshake verified and ready to crack!");
+                    println!("\nHandshake Details:");
+                    println!("  SSID: {}", handshake.ssid);
+                    println!(
+                        "  AP MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                        handshake.ap_mac[0],
+                        handshake.ap_mac[1],
+                        handshake.ap_mac[2],
+                        handshake.ap_mac[3],
+                        handshake.ap_mac[4],
+                        handshake.ap_mac[5]
+                    );
+                    println!("  Key Version: {}", handshake.key_version);
+                    captured_ssid = Some(handshake.ssid);
                 }
-
-                println!("✅ Handshake verified and ready to crack!");
-                println!("\nHandshake Details:");
-                println!("  SSID: {}", handshake.ssid);
-                println!(
-                    "  AP MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                    handshake.ap_mac[0],
-                    handshake.ap_mac[1],
-                    handshake.ap_mac[2],
-                    handshake.ap_mac[3],
-                    handshake.ap_mac[4],
-                    handshake.ap_mac[5]
-                );
-                println!("  Key Version: {}", handshake.key_version);
-
-                println!("\nNext step - Run crack command:");
-                println!(
-                    "  bruteforce-wifi crack numeric {} --min 8 --max 8",
-                    output_file
-                );
             }
             Err(e) => {
                 println!("⚠️  Handshake verification failed: {}", e);
@@ -961,7 +960,7 @@ pub fn capture_traffic(options: CaptureOptions) -> Result<()> {
         }
     }
 
-    Ok(())
+    Ok(captured_ssid)
 }
 
 /// Parse BSSID and SSID from beacon/probe response frames

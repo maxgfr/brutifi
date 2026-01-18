@@ -83,99 +83,18 @@ jobs:
           VERSION="${{ needs.release.outputs.new_release_version }}"
           if [ -z "$VERSION" ]; then VERSION="0.0.0-dev.${{ github.run_number }}"; fi
           TARGET="${{ matrix.target }}"
-          APP_DIR="${APP_NAME}.app"
 
-          mkdir -p "${APP_DIR}/Contents/MacOS"
-          mkdir -p "${APP_DIR}/Contents/Resources"
+          # Copy binary to release directory for the build script
+          mkdir -p target/release
+          cp "target/${TARGET}/release/bruteforce-wifi" "target/release/bruteforce-wifi"
 
-          # Copy binary to a different name (the actual executable)
-          cp "target/${TARGET}/release/bruteforce-wifi" "${APP_DIR}/Contents/MacOS/${APP_NAME}_bin"
-          chmod +x "${APP_DIR}/Contents/MacOS/${APP_NAME}_bin"
+          # Use our build script
+          chmod +x macos/build-app.sh
+          ./macos/build-app.sh
 
-          # Create a C wrapper that requests root privileges
-          # This is used instead of a shell script so correct signing works
-          cat > wrapper.c << EOF
-          #include <unistd.h>
-          #include <stdio.h>
-          #include <stdlib.h>
-          #include <string.h>
-          #include <libgen.h>
-          #include <mach-o/dyld.h>
-
-          int main(int argc, char *argv[]) {
-              char exe_path[1024];
-              uint32_t size = sizeof(exe_path);
-              if (_NSGetExecutablePath(exe_path, &size) != 0) {
-                  return 1;
-              }
-              
-              char *dir = dirname(exe_path);
-              char binary_path[1024];
-              snprintf(binary_path, sizeof(binary_path), "%s/${APP_NAME}_bin", dir);
-              
-              if (geteuid() != 0) {
-                  char **new_argv = malloc((argc + 3) * sizeof(char*));
-                  new_argv[0] = "sudo";
-                  new_argv[1] = binary_path;
-                  for (int i = 1; i < argc; i++) {
-                      new_argv[i + 1] = argv[i];
-                  }
-                  new_argv[argc + 1] = NULL;
-                  
-                  execvp("sudo", new_argv);
-              } else {
-                  execv(binary_path, argv);
-              }
-              return 1;
-          }
-          EOF
-
-          # Compile the wrapper
-          cc -o "${APP_DIR}/Contents/MacOS/${APP_NAME}" wrapper.c
-          rm wrapper.c
-
-          # Create Info.plist
-          cat > "${APP_DIR}/Contents/Info.plist" << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleDevelopmentRegion</key>
-              <string>en</string>
-              <key>CFBundleExecutable</key>
-              <string>${APP_NAME}</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.maxgfr.bruteforce-wifi</string>
-              <key>CFBundleInfoDictionaryVersion</key>
-              <string>6.0</string>
-              <key>CFBundleName</key>
-              <string>${APP_NAME}</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>${VERSION}</string>
-              <key>CFBundleVersion</key>
-              <string>${VERSION}</string>
-              <key>LSMinimumSystemVersion</key>
-              <string>11.0</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-              <key>NSLocationUsageDescription</key>
-              <string>WiFi Bruteforce needs location access to retrieve WiFi BSSID information for network scanning.</string>
-              <key>NSLocationWhenInUseUsageDescription</key>
-              <string>WiFi Bruteforce needs location access to retrieve WiFi BSSID information for network scanning.</string>
-              <key>LSUIElement</key>
-              <false/>
-              <key>LSRequiresRoot</key>
-              <true/>
-              <key>SMPrivilegedExecutables</key>
-              <dict>
-                  <key>com.maxgfr.bruteforce-wifi.helper</key>
-                  <string>anchor apple generic and identifier "com.maxgfr.bruteforce-wifi.helper"</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
+          # Update version in Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "target/release/${APP_NAME}.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "target/release/${APP_NAME}.app/Contents/Info.plist"
 
       - name: Sign the app bundle using apple-code-sign-action
         uses: indygreg/apple-code-sign-action@v1
@@ -194,8 +113,18 @@ jobs:
           DMG_TEMP="dmg_temp"
 
           mkdir -p "${DMG_TEMP}"
-          cp -R "${APP_NAME}.app" "${DMG_TEMP}/"
+          cp -R "target/release/${APP_NAME}.app" "${DMG_TEMP}/"
           ln -s /Applications "${DMG_TEMP}/Applications"
+
+          echo "WiFi Bruteforce v${VERSION}" > "${DMG_TEMP}/README.txt"
+          echo "" >> "${DMG_TEMP}/README.txt"
+          echo "Installation:" >> "${DMG_TEMP}/README.txt"
+          echo "1. Drag 'WiFi Bruteforce.app' to Applications folder" >> "${DMG_TEMP}/README.txt"
+          echo "2. Double-click to launch" >> "${DMG_TEMP}/README.txt"
+          echo "3. Grant Location Services permission when prompted" >> "${DMG_TEMP}/README.txt"
+          echo "4. Enter your password when prompted for admin privileges" >> "${DMG_TEMP}/README.txt"
+          echo "" >> "${DMG_TEMP}/README.txt"
+          echo "For more information: https://github.com/maxgfr/bruteforce-wifi" >> "${DMG_TEMP}/README.txt"
 
           hdiutil create -volname "${APP_NAME}" \
             -srcfolder "${DMG_TEMP}" \

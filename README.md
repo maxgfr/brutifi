@@ -63,12 +63,33 @@ Since this app is not signed with an Apple Developer certificate, you'll need to
    ```
 
 **Alternative: Build from source** (avoids signing issues):
+
 ```bash
 git clone https://github.com/maxgfr/bruteforce-wifi.git
 cd bruteforce-wifi
 cargo build --release
+
+# Option 1: Create a proper .app bundle (recommended)
+./macos/build-app.sh
+open "target/release/WiFi Bruteforce.app"
+
+# Option 2: Run directly with sudo
 sudo ./target/release/bruteforce-wifi
 ```
+
+**Creating a Proper App Bundle:**
+
+The included `macos/build-app.sh` script creates a proper macOS app bundle with:
+- Automatic sudo privilege request (no manual terminal commands needed!)
+- Location Services permission prompts
+- Launcher that handles permissions gracefully
+
+After running `./macos/build-app.sh`, you can:
+1. Double-click "WiFi Bruteforce.app" to launch
+2. Click "Continue" when prompted for admin password
+3. The app will automatically request Location Services permission on first scan
+
+This makes the app work just like any other macOS application!
 
 ### Windows
 

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>bruteforce-wifi</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.maxgfr.bruteforce-wifi</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>WiFi Bruteforce</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.4.2</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>10.15</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    
+    <!-- Location Services Permission -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>WiFi Bruteforce needs access to Location Services to scan and display WiFi network BSSIDs (MAC addresses). This is required by macOS to access WiFi details.</string>
+    
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>WiFi Bruteforce needs access to Location Services to scan WiFi networks and capture handshakes. This is a system requirement for accessing WiFi information.</string>
+    
+    <!-- Camera/Microphone not needed, but sometimes required for network access -->
+    <key>NSCameraUsageDescription</key>
+    <string>This app does not use the camera.</string>
+    
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app does not use the microphone.</string>
+    
+    <!-- Network -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>WiFi Bruteforce needs network access to scan WiFi networks and capture packets.</string>
+    
+    <!-- High DPI Support -->
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    
+    <!-- App Category -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.developer-tools</string>
+</dict>
+</plist>

@@ -296,14 +296,34 @@ impl BruteforceApp {
                     workers::CaptureProgress::PacketsCaptured(count) => {
                         self.scan_capture_screen.packets_captured = count;
                     }
+                    workers::CaptureProgress::Log(msg) => {
+                        self.scan_capture_screen.log_messages.push(msg);
+                        // Keep only last 50 messages
+                        if self.scan_capture_screen.log_messages.len() > 50 {
+                            self.scan_capture_screen.log_messages.remove(0);
+                        }
+                    }
                     workers::CaptureProgress::EapolDetected {
                         message_type,
                         ap_mac,
                         client_mac,
                     } => {
+                        let msg = format!("EAPOL M{}: {} → {}", message_type, 
+                            &ap_mac[..17], &client_mac[..17]);
+                        self.scan_capture_screen.log_messages.push(msg);
+                        
                         match message_type {
-                            1 => self.scan_capture_screen.handshake_progress.m1_received = true,
-                            2 => self.scan_capture_screen.handshake_progress.m2_received = true,
+                            1 => {
+                                self.scan_capture_screen.handshake_progress.m1_received = true;
+                            },
+                            2 => {
+                                self.scan_capture_screen.handshake_progress.m2_received = true;
+                                // Check if we have M1+M2 (complete handshake)
+                                if self.scan_capture_screen.handshake_progress.m1_received {
+                                    self.scan_capture_screen.handshake_complete = true;
+                                    self.scan_capture_screen.log_messages.push("✅ Handshake complete!".to_string());
+                                }
+                            },
                             3 => self.scan_capture_screen.handshake_progress.m3_received = true,
                             4 => self.scan_capture_screen.handshake_progress.m4_received = true,
                             _ => {}
@@ -311,13 +331,15 @@ impl BruteforceApp {
                         self.scan_capture_screen.handshake_progress.last_ap_mac = ap_mac;
                         self.scan_capture_screen.handshake_progress.last_client_mac = client_mac;
                     }
-                    workers::CaptureProgress::HandshakeComplete { ssid: _ } => {
+                    workers::CaptureProgress::HandshakeComplete { ssid } => {
                         self.scan_capture_screen.handshake_complete = true;
                         self.scan_capture_screen.is_capturing = false;
+                        self.scan_capture_screen.log_messages.push(format!("✅ Handshake captured for '{}'", ssid));
                     }
                     workers::CaptureProgress::Error(msg) => {
-                        self.scan_capture_screen.error_message = Some(msg);
+                        self.scan_capture_screen.error_message = Some(msg.clone());
                         self.scan_capture_screen.is_capturing = false;
+                        self.scan_capture_screen.log_messages.push(format!("❌ Error: {}", msg));
                     }
                     workers::CaptureProgress::Finished {
                         output_file,
