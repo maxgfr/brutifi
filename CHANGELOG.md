@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0](https://github.com/maxgfr/brutifi/compare/v1.7.1...v1.8.0) (2026-01-19)
+
+
+### ✨ Features
+
+* Enhance macOS support with admin privileges request and add application icon ([cff576a](https://github.com/maxgfr/brutifi/commit/cff576af8ca376192a885045c11f7c294bb87107))
+
 ## [1.7.1](https://github.com/maxgfr/brutifi/compare/v1.7.0...v1.7.1) (2026-01-19)
 
 
