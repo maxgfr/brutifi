@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.1](https://github.com/maxgfr/brutifi/compare/v1.7.0...v1.7.1) (2026-01-19)
+
+
+### ♻️ Code Refactoring
+
+* Update acknowledgments section and consolidate inspiration content in README ([c81ebfd](https://github.com/maxgfr/brutifi/commit/c81ebfdb1d955f3be39b6df82a53c9bc2b4e2570))
+
 ## [1.7.0](https://github.com/maxgfr/brutifi/compare/v1.6.0...v1.7.0) (2026-01-19)
 
 
