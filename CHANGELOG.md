@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.0](https://github.com/maxgfr/brutifi/compare/v1.9.0...v1.10.0) (2026-01-19)
+
+
+### ✨ Features
+
+* Implement admin mode functionality and user prompts for macOS ([9d51201](https://github.com/maxgfr/brutifi/commit/9d51201874a7c88ca7728d2511dea691d1973153))
+
 ## [1.9.0](https://github.com/maxgfr/brutifi/compare/v1.8.0...v1.9.0) (2026-01-19)
 
 
