@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.0](https://github.com/maxgfr/brutifi/compare/v1.8.0...v1.9.0) (2026-01-19)
+
+
+### ✨ Features
+
+* Preserve user context when relaunching as root on macOS ([f5bb99c](https://github.com/maxgfr/brutifi/commit/f5bb99c15f95b9f579ee4da28af28aeb8070988b))
+
 ## [1.8.0](https://github.com/maxgfr/brutifi/compare/v1.7.1...v1.8.0) (2026-01-19)
 
 
