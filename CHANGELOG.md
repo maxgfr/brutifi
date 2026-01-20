@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.0](https://github.com/maxgfr/brutifi/compare/v1.10.0...v1.11.0) (2026-01-20)
+
+
+### ✨ Features
+
+* Refactor app initialization for macOS and non-macOS environments ([e616c85](https://github.com/maxgfr/brutifi/commit/e616c855837448947ac49f6b657b77f5920e5829))
+
 ## [1.10.0](https://github.com/maxgfr/brutifi/compare/v1.9.0...v1.10.0) (2026-01-19)
 
 
