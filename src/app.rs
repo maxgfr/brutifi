@@ -91,23 +91,24 @@ impl BruteforceApp {
     pub fn new(is_root: bool) -> (Self, Task<Message>) {
         let interface_list = list_interfaces();
         let selected_interface = choose_default_interface(&interface_list);
-        let mut app = Self {
-            screen: Screen::ScanCapture,
-            scan_capture_screen: ScanCaptureScreen {
-                interface_list,
-                selected_interface,
-                ..ScanCaptureScreen::default()
-            },
-            crack_screen: CrackScreen::default(),
-            is_root,
-            capture_state: None,
-            capture_progress_rx: None,
-            crack_state: None,
-            crack_progress_rx: None,
-        };
 
         #[cfg(target_os = "macos")]
         {
+            let mut app = Self {
+                screen: Screen::ScanCapture,
+                scan_capture_screen: ScanCaptureScreen {
+                    interface_list,
+                    selected_interface,
+                    ..ScanCaptureScreen::default()
+                },
+                crack_screen: CrackScreen::default(),
+                is_root,
+                capture_state: None,
+                capture_progress_rx: None,
+                crack_state: None,
+                crack_progress_rx: None,
+            };
+
             if let Ok(screen) = std::env::var("BRUTIFI_START_SCREEN") {
                 if screen.eq_ignore_ascii_case("crack") {
                     app.screen = Screen::Crack;
@@ -135,9 +136,29 @@ impl BruteforceApp {
                     app.crack_screen.wordlist_path = path;
                 }
             }
+
+            (app, Task::none())
         }
 
-        (app, Task::none())
+        #[cfg(not(target_os = "macos"))]
+        {
+            let app = Self {
+                screen: Screen::ScanCapture,
+                scan_capture_screen: ScanCaptureScreen {
+                    interface_list,
+                    selected_interface,
+                    ..ScanCaptureScreen::default()
+                },
+                crack_screen: CrackScreen::default(),
+                is_root,
+                capture_state: None,
+                capture_progress_rx: None,
+                crack_state: None,
+                crack_progress_rx: None,
+            };
+
+            (app, Task::none())
+        }
     }
 
     pub fn theme(&self) -> Theme {
