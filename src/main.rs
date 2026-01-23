@@ -217,6 +217,39 @@ fn main() -> iced::Result {
         }
     }
 
+    // Windows: Check for WinPcap/Npcap before starting
+    #[cfg(target_os = "windows")]
+    {
+        use brutifi::core::network::check_pcap_available;
+        if let Err(e) = check_pcap_available() {
+            eprintln!("\n{}", "!".repeat(60));
+            eprintln!("ERROR: Npcap/WinPcap Not Found");
+            eprintln!("{}\n", "!".repeat(60));
+            eprintln!("{}\n", e);
+            eprintln!("The application will exit now.");
+            eprintln!("Please install Npcap and restart BrutiFi.\n");
+
+            // Show a message box on Windows
+            #[cfg(target_os = "windows")]
+            {
+                use std::process::Command;
+                let _ = Command::new("cmd")
+                    .args(&[
+                        "/C",
+                        "msg",
+                        "*",
+                        "BrutiFi Error: Npcap is required but not found.\n\n\
+                        Please install Npcap from https://npcap.com/#download\n\n\
+                        During installation, check 'Install Npcap in WinPcap API-compatible Mode'\n\n\
+                        Then restart BrutiFi."
+                    ])
+                    .spawn();
+            }
+
+            std::process::exit(1);
+        }
+    }
+
     // Print startup info
     eprintln!("\nBrutyFi v{}", env!("CARGO_PKG_VERSION"));
     eprintln!("================================\n");

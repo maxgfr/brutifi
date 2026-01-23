@@ -12,6 +12,41 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(target_os = "windows")]
+use std::ptr;
+
+/// Check if WinPcap/Npcap is installed on Windows
+#[cfg(target_os = "windows")]
+pub fn check_pcap_available() -> Result<()> {
+    use std::ffi::CString;
+
+    // Try to load wpcap.dll
+    let dll_name = CString::new("wpcap.dll").unwrap();
+    unsafe {
+        let handle = winapi::um::libloaderapi::LoadLibraryA(dll_name.as_ptr());
+        if handle.is_null() {
+            return Err(anyhow!(
+                "wpcap.dll not found. Npcap or WinPcap must be installed.\n\n\
+                Please install Npcap from: https://npcap.com/#download\n\n\
+                Installation steps:\n\
+                1. Download Npcap installer from https://npcap.com/#download\n\
+                2. Run the installer as Administrator\n\
+                3. During installation, check 'Install Npcap in WinPcap API-compatible Mode'\n\
+                4. Restart BrutiFi after installation\n\n\
+                Note: WinPcap is deprecated. Npcap is the modern replacement."
+            ));
+        }
+        // Free the library handle
+        winapi::um::libloaderapi::FreeLibrary(handle);
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn check_pcap_available() -> Result<()> {
+    Ok(())
+}
+
 fn get_all_wifi_channels() -> Vec<u32> {
     let mut channels = Vec::new();
 
@@ -268,9 +303,7 @@ exit(1)
     let start = std::time::Instant::now();
 
     // Execute
-    let output = match Command::new("swift")
-        .arg(script_path)
-        .output() {
+    let output = match Command::new("swift").arg(script_path).output() {
         Ok(out) => out,
         Err(e) => {
             eprintln!("[ERROR] Failed to execute Swift: {}", e);
@@ -297,7 +330,10 @@ exit(1)
             eprintln!("[DEBUG] Swift succeeded but returned empty SSID");
         }
     } else {
-        eprintln!("[DEBUG] Swift exited with status: {:?}", output.status.code());
+        eprintln!(
+            "[DEBUG] Swift exited with status: {:?}",
+            output.status.code()
+        );
         eprintln!("[DEBUG] stdout: {}", stdout.trim());
     }
 

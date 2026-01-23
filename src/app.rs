@@ -52,6 +52,7 @@ pub enum Message {
     SaveCapturedPcap(Option<PathBuf>),
     DisconnectWifi,
     WifiDisconnectResult(Result<(), String>),
+    CopyLogsToClipboard,
     StartCapture,
     StopCapture,
     CaptureProgress(workers::CaptureProgress),
@@ -253,6 +254,29 @@ impl BruteforceApp {
                 Task::none()
             }
             Message::GoToCrack => {
+                // Stop capture if currently capturing
+                if self.scan_capture_screen.is_capturing {
+                    if let Some(ref state) = self.capture_state {
+                        state.stop();
+                    }
+                    self.scan_capture_screen.is_capturing = false;
+                    self.capture_state = None;
+                    self.capture_progress_rx = None;
+
+                    // Add log message about stopping capture
+                    self.scan_capture_screen
+                        .log_messages
+                        .push("⏹️ Capture stopped (navigated to crack screen)".to_string());
+                    if self.scan_capture_screen.log_messages.len() > 50 {
+                        self.scan_capture_screen.log_messages.remove(0);
+                    }
+                    let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                    self.scan_capture_screen.logs_content =
+                        text_editor::Content::with_text(&logs_text);
+
+                    self.persist_state();
+                }
+
                 #[cfg(target_os = "macos")]
                 if self.is_root {
                     let mut envs = Vec::new();
@@ -413,18 +437,34 @@ impl BruteforceApp {
                 self.persist_state();
                 Task::none()
             }
-            Message::BrowseCaptureFile => Task::perform(
-                async {
-                    rfd::AsyncFileDialog::new()
-                        .set_title("Save Capture File")
-                        .add_filter("Capture Files", &["pcap", "pcap"])
-                        .set_file_name("handshake.pcap")
-                        .save_file()
-                        .await
-                        .map(|handle| handle.path().to_path_buf())
-                },
-                Message::CaptureFileSelected,
-            ),
+            Message::BrowseCaptureFile => {
+                let current_path = PathBuf::from(&self.scan_capture_screen.output_file);
+                let dir = current_path.parent().map(|p| p.to_path_buf());
+                let filename = current_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("handshake.pcap")
+                    .to_string();
+
+                Task::perform(
+                    async move {
+                        let mut dialog = rfd::AsyncFileDialog::new()
+                            .set_title("Choose Capture Output Location")
+                            .add_filter("PCAP Files", &["pcap", "cap"])
+                            .set_file_name(&filename);
+
+                        if let Some(d) = dir {
+                            dialog = dialog.set_directory(d);
+                        }
+
+                        dialog
+                            .save_file()
+                            .await
+                            .map(|handle| handle.path().to_path_buf())
+                    },
+                    Message::CaptureFileSelected,
+                )
+            }
             Message::DownloadCapturedPcap => Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
@@ -439,7 +479,18 @@ impl BruteforceApp {
             ),
             Message::CaptureFileSelected(path) => {
                 if let Some(path) = path {
-                    self.scan_capture_screen.output_file = path.to_string_lossy().to_string();
+                    let path_str = path.to_string_lossy().to_string();
+                    eprintln!("[DEBUG] Capture file selected: {}", path_str);
+                    self.scan_capture_screen.output_file = path_str.clone();
+                    self.scan_capture_screen
+                        .log_messages
+                        .push(format!("📁 Output file: {}", path_str));
+                    if self.scan_capture_screen.log_messages.len() > 50 {
+                        self.scan_capture_screen.log_messages.remove(0);
+                    }
+                    let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                    self.scan_capture_screen.logs_content =
+                        text_editor::Content::with_text(&logs_text);
                 }
                 self.persist_state();
                 Task::none()
@@ -463,6 +514,9 @@ impl BruteforceApp {
                             if self.scan_capture_screen.log_messages.len() > 50 {
                                 self.scan_capture_screen.log_messages.remove(0);
                             }
+                            let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                            self.scan_capture_screen.logs_content =
+                                text_editor::Content::with_text(&logs_text);
                         }
                     } else {
                         self.scan_capture_screen.error_message =
@@ -470,6 +524,60 @@ impl BruteforceApp {
                     }
                 }
                 self.persist_state();
+                Task::none()
+            }
+            Message::CopyLogsToClipboard => {
+                let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                if !logs_text.is_empty() {
+                    #[cfg(target_os = "macos")]
+                    {
+                        use std::io::Write;
+                        use std::process::{Command, Stdio};
+
+                        // Spawn pbcopy with piped stdin
+                        let result = Command::new("pbcopy")
+                            .stdin(Stdio::piped())
+                            .spawn()
+                            .and_then(|mut child| {
+                                // Take ownership of stdin to ensure it's closed after writing
+                                if let Some(mut stdin) = child.stdin.take() {
+                                    // Write logs to stdin
+                                    stdin.write_all(logs_text.as_bytes())?;
+                                    // stdin is automatically closed when dropped here
+                                }
+                                // Wait for pbcopy to finish
+                                child.wait()
+                            });
+
+                        match result {
+                            Ok(_) => {
+                                self.scan_capture_screen
+                                    .log_messages
+                                    .push("📋 Logs copied to clipboard".to_string());
+                            }
+                            Err(e) => {
+                                eprintln!("[ERROR] Failed to copy logs: {}", e);
+                                self.scan_capture_screen
+                                    .log_messages
+                                    .push(format!("❌ Failed to copy: {}", e));
+                            }
+                        }
+
+                        if self.scan_capture_screen.log_messages.len() > 50 {
+                            self.scan_capture_screen.log_messages.remove(0);
+                        }
+                        let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                        self.scan_capture_screen.logs_content =
+                            text_editor::Content::with_text(&logs_text);
+                    }
+
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        self.scan_capture_screen
+                            .log_messages
+                            .push("❌ Copy to clipboard only supported on macOS".to_string());
+                    }
+                }
                 Task::none()
             }
             Message::DisconnectWifi => Task::perform(
@@ -495,7 +603,6 @@ impl BruteforceApp {
                         self.scan_capture_screen
                             .log_messages
                             .push("✓ You can now start capture".to_string());
-
                     }
                     Err(err) => {
                         self.scan_capture_screen.error_message = Some(err.clone());
@@ -507,6 +614,8 @@ impl BruteforceApp {
                 if self.scan_capture_screen.log_messages.len() > 50 {
                     self.scan_capture_screen.log_messages.remove(0);
                 }
+                let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                self.scan_capture_screen.logs_content = text_editor::Content::with_text(&logs_text);
                 Task::none()
             }
             Message::StartCapture => {
@@ -573,7 +682,11 @@ impl BruteforceApp {
                     .clone()
                     .or_else(|| {
                         // Fallback: take first channel from network
-                        network.channel.split(',').next().map(|s| s.trim().to_string())
+                        network
+                            .channel
+                            .split(',')
+                            .next()
+                            .map(|s| s.trim().to_string())
                     });
 
                 let channel = channel_str.and_then(|ch| {
@@ -605,7 +718,11 @@ impl BruteforceApp {
                 }
 
                 // Log channel selection
-                let selected_ch_str = self.scan_capture_screen.selected_channel.as_deref().unwrap_or("auto");
+                let selected_ch_str = self
+                    .scan_capture_screen
+                    .selected_channel
+                    .as_deref()
+                    .unwrap_or("auto");
                 eprintln!(
                     "[DEBUG] Starting capture on channel: {:?} (selected: '{}', network raw: '{}')",
                     channel, selected_ch_str, network.channel
@@ -640,6 +757,9 @@ impl BruteforceApp {
                         if self.scan_capture_screen.log_messages.len() > 50 {
                             self.scan_capture_screen.log_messages.remove(0);
                         }
+                        let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                        self.scan_capture_screen.logs_content =
+                            text_editor::Content::with_text(&logs_text);
                     }
                     workers::CaptureProgress::HandshakeComplete { ssid } => {
                         self.scan_capture_screen.handshake_complete = true;
@@ -649,6 +769,9 @@ impl BruteforceApp {
                         self.scan_capture_screen
                             .log_messages
                             .push(format!("✅ Handshake captured for '{}'", ssid));
+                        let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                        self.scan_capture_screen.logs_content =
+                            text_editor::Content::with_text(&logs_text);
                         self.persist_state();
 
                         #[cfg(target_os = "macos")]
@@ -665,6 +788,9 @@ impl BruteforceApp {
                         self.scan_capture_screen
                             .log_messages
                             .push(format!("❌ Error: {}", msg));
+                        let logs_text = self.scan_capture_screen.log_messages.join("\n");
+                        self.scan_capture_screen.logs_content =
+                            text_editor::Content::with_text(&logs_text);
                         self.persist_state();
                     }
                     workers::CaptureProgress::Finished {
@@ -1022,7 +1148,14 @@ impl BruteforceApp {
                 Task::none()
             }
             Message::LogsEditorAction(action) => {
-                self.crack_screen.logs_content.perform(action);
+                match self.screen {
+                    Screen::Crack => {
+                        self.crack_screen.logs_content.perform(action);
+                    }
+                    Screen::ScanCapture => {
+                        self.scan_capture_screen.logs_content.perform(action);
+                    }
+                }
                 Task::none()
             }
             Message::ReturnToNormalMode => {
