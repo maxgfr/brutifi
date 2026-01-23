@@ -7,8 +7,7 @@
  */
 
 use iced::widget::{
-    button, checkbox, column, container, horizontal_space, pick_list, row, text, text_editor,
-    text_input,
+    button, column, container, horizontal_space, pick_list, row, text, text_editor, text_input,
 };
 use iced::{Element, Length};
 
@@ -54,7 +53,6 @@ impl std::fmt::Display for CrackMethod {
 #[derive(Debug)]
 pub struct CrackScreen {
     pub handshake_path: String,
-    pub use_captured_file: bool,
     pub ssid: String,
     pub engine: CrackEngine,
     pub method: CrackMethod,
@@ -83,8 +81,7 @@ impl Default for CrackScreen {
         let (hcxtools, hashcat) = brutifi::are_external_tools_available();
 
         Self {
-            handshake_path: "/tmp/capture.pcap".to_string(),
-            use_captured_file: true,
+            handshake_path: String::new(),
             ssid: String::new(),
             engine: CrackEngine::Native,
             method: CrackMethod::Numeric,
@@ -212,35 +209,23 @@ impl CrackScreen {
             .into(),
         };
 
-        // Handshake file input
-        let mut handshake_input = column![
-            text("Handshake File").size(13).color(colors::TEXT),
-            checkbox(
-                "Use captured file from Capture screen",
-                self.use_captured_file
-            )
-            .on_toggle(Message::UseCapturedFileToggled)
-            .size(14),
+        // Handshake file input (required)
+        let handshake_input = column![
+            text("Handshake File *").size(13).color(colors::TEXT),
+            row![
+                text_input("Select a .cap/.pcap file", &self.handshake_path)
+                    .on_input(Message::HandshakePathChanged)
+                    .padding(10)
+                    .size(14)
+                    .width(Length::Fill),
+                button(text("Browse").size(13))
+                    .padding([10, 15])
+                    .style(theme::secondary_button_style)
+                    .on_press(Message::BrowseHandshake),
+            ]
+            .spacing(10),
         ]
         .spacing(6);
-
-        // Only show file browse when NOT using captured file
-        if !self.use_captured_file {
-            handshake_input = handshake_input.push(
-                row![
-                    text_input("Browse for .cap file", &self.handshake_path)
-                        .on_input(Message::HandshakePathChanged)
-                        .padding(10)
-                        .size(14)
-                        .width(Length::Fill),
-                    button(text("Browse").size(13))
-                        .padding([10, 15])
-                        .style(theme::secondary_button_style)
-                        .on_press(Message::BrowseHandshake),
-                ]
-                .spacing(10),
-            );
-        }
 
         // Method selection
         let method_picker = column![
@@ -512,19 +497,10 @@ impl CrackScreen {
 
         // Logs display
         let logs_display = if !self.log_messages.is_empty() {
-            let header = row![
-                text("Logs").size(13).color(colors::TEXT),
-                horizontal_space(),
-                button(text("Copy logs").size(11))
-                    .padding([6, 10])
-                    .style(theme::secondary_button_style)
-                    .on_press(Message::CopyLogs),
-            ];
-
             Some(
                 container(
                     column![
-                        header,
+                        text("Logs").size(13).color(colors::TEXT),
                         text_editor(&self.logs_content)
                             .on_action(Message::LogsEditorAction)
                             .padding(8)

@@ -466,19 +466,10 @@ impl ScanCaptureScreen {
 
         // ========== LOGS BLOCK ==========
         let logs_block: Option<Element<'_, Message>> = if !self.log_messages.is_empty() {
-            let header = row![
-                text("Logs").size(13).color(colors::TEXT),
-                horizontal_space(),
-                button(text("Copy logs").size(11))
-                    .padding([6, 10])
-                    .style(theme::secondary_button_style)
-                    .on_press(Message::CopyLogsToClipboard),
-            ];
-
             Some(
                 container(
                     column![
-                        header,
+                        text("Logs").size(13).color(colors::TEXT),
                         text_editor(&self.logs_content)
                             .on_action(Message::LogsEditorAction)
                             .padding(8)

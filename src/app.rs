@@ -12,8 +12,10 @@ use iced::time;
 use iced::widget::{button, column, container, horizontal_rule, row, text, text_editor};
 use iced::{clipboard, Element, Length, Subscription, Task, Theme};
 use pcap::Device;
-use serde::{Deserialize, Serialize};
 
+use crate::persistence::{
+    PersistedCaptureState, PersistedCrackState, PersistedScanState, PersistedState,
+};
 use crate::screens::{CrackEngine, CrackMethod, CrackScreen, HandshakeProgress, ScanCaptureScreen};
 use crate::theme::colors;
 use crate::workers::{
@@ -21,7 +23,6 @@ use crate::workers::{
     WordlistCrackParams,
 };
 use crate::workers_optimized;
-use brutifi::WifiNetwork;
 
 /// Application screens
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -52,7 +53,6 @@ pub enum Message {
     SaveCapturedPcap(Option<PathBuf>),
     DisconnectWifi,
     WifiDisconnectResult(Result<(), String>),
-    CopyLogsToClipboard,
     StartCapture,
     StopCapture,
     CaptureProgress(workers::CaptureProgress),
@@ -60,7 +60,6 @@ pub enum Message {
     EnableAdminMode,
 
     // Crack screen
-    UseCapturedFileToggled(bool),
     HandshakePathChanged(String),
     EngineChanged(CrackEngine),
     MethodChanged(CrackMethod),
@@ -75,7 +74,6 @@ pub enum Message {
     StopCrack,
     CrackProgress(workers::CrackProgress),
     CopyPassword,
-    CopyLogs,
     LogsEditorAction(text_editor::Action),
     #[allow(dead_code)]
     ReturnToNormalMode,
@@ -94,43 +92,6 @@ pub struct BruteforceApp {
     capture_progress_rx: Option<tokio::sync::mpsc::UnboundedReceiver<workers::CaptureProgress>>,
     crack_state: Option<Arc<CrackState>>,
     crack_progress_rx: Option<tokio::sync::mpsc::UnboundedReceiver<workers::CrackProgress>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct PersistedState {
-    version: u32,
-    scan: PersistedScanState,
-    capture: PersistedCaptureState,
-    crack: PersistedCrackState,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct PersistedScanState {
-    networks: Vec<WifiNetwork>,
-    selected_network: Option<usize>,
-    selected_interface: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct PersistedCaptureState {
-    target_network: Option<WifiNetwork>,
-    output_file: String,
-    handshake_complete: bool,
-    packets_captured: u64,
-    last_saved_capture_path: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct PersistedCrackState {
-    handshake_path: String,
-    use_captured_file: bool,
-    ssid: String,
-    engine: CrackEngine,
-    method: CrackMethod,
-    min_digits: String,
-    max_digits: String,
-    wordlist_path: String,
-    threads: usize,
 }
 
 impl BruteforceApp {
@@ -179,10 +140,6 @@ impl BruteforceApp {
                 if !ssid.is_empty() {
                     app.crack_screen.ssid = ssid;
                 }
-            }
-
-            if let Ok(val) = std::env::var("BRUTIFI_USE_CAPTURED") {
-                app.crack_screen.use_captured_file = val == "1" || val.eq_ignore_ascii_case("true");
             }
 
             if let Ok(path) = std::env::var("BRUTIFI_WORDLIST_PATH") {
@@ -292,14 +249,6 @@ impl BruteforceApp {
                             envs.push(("BRUTIFI_SSID", network.ssid.clone()));
                         }
                     }
-                    envs.push((
-                        "BRUTIFI_USE_CAPTURED",
-                        if self.crack_screen.use_captured_file {
-                            "1".to_string()
-                        } else {
-                            "0".to_string()
-                        },
-                    ));
                     if !self.crack_screen.wordlist_path.is_empty() {
                         envs.push((
                             "BRUTIFI_WORDLIST_PATH",
@@ -317,16 +266,13 @@ impl BruteforceApp {
                     );
                 }
 
-                // Set handshake path from capture only if using captured file
-                if self.crack_screen.use_captured_file {
-                    if let Some(ref saved) = self.scan_capture_screen.last_saved_capture_path {
-                        if !saved.is_empty() {
-                            self.crack_screen.handshake_path = saved.clone();
-                        }
-                    } else if !self.scan_capture_screen.output_file.is_empty() {
-                        self.crack_screen.handshake_path =
-                            self.scan_capture_screen.output_file.clone();
+                // Set handshake path from capture
+                if let Some(ref saved) = self.scan_capture_screen.last_saved_capture_path {
+                    if !saved.is_empty() {
+                        self.crack_screen.handshake_path = saved.clone();
                     }
+                } else if !self.scan_capture_screen.output_file.is_empty() {
+                    self.crack_screen.handshake_path = self.scan_capture_screen.output_file.clone();
                 }
                 // Set SSID from captured network
                 if let Some(ref network) = self.scan_capture_screen.target_network {
@@ -509,9 +455,7 @@ impl BruteforceApp {
                         } else {
                             self.scan_capture_screen.last_saved_capture_path =
                                 Some(dest.display().to_string());
-                            if self.crack_screen.use_captured_file {
-                                self.crack_screen.handshake_path = dest.display().to_string();
-                            }
+                            self.crack_screen.handshake_path = dest.display().to_string();
                             self.scan_capture_screen
                                 .log_messages
                                 .push(format!("✅ Capture saved to {}", dest.display()));
@@ -528,40 +472,6 @@ impl BruteforceApp {
                     }
                 }
                 self.persist_state();
-                Task::none()
-            }
-            Message::CopyLogsToClipboard => {
-                let logs_text = self.scan_capture_screen.log_messages.join("\n");
-                if !logs_text.is_empty() {
-                    // On macOS, clipboard::write may fail when running as root
-                    // Use pbcopy as a more reliable fallback
-                    #[cfg(target_os = "macos")]
-                    {
-                        use std::io::Write;
-                        use std::process::{Command, Stdio};
-
-                        if let Ok(mut child) = Command::new("pbcopy").stdin(Stdio::piped()).spawn()
-                        {
-                            if let Some(mut stdin) = child.stdin.take() {
-                                let _ = stdin.write_all(logs_text.as_bytes());
-                            }
-                            let _ = child.wait();
-                            self.scan_capture_screen
-                                .log_messages
-                                .push("📋 Logs copied to clipboard".to_string());
-                            if self.scan_capture_screen.log_messages.len() > 50 {
-                                self.scan_capture_screen.log_messages.remove(0);
-                            }
-                            let new_logs_text = self.scan_capture_screen.log_messages.join("\n");
-                            self.scan_capture_screen.logs_content =
-                                text_editor::Content::with_text(&new_logs_text);
-                            return Task::none();
-                        }
-                    }
-
-                    // Fallback to Iced clipboard (works on non-macOS or if pbcopy fails)
-                    return clipboard::write(logs_text);
-                }
                 Task::none()
             }
             Message::DisconnectWifi => Task::perform(
@@ -815,25 +725,6 @@ impl BruteforceApp {
             }
 
             // Crack screen
-            Message::UseCapturedFileToggled(enabled) => {
-                self.crack_screen.use_captured_file = enabled;
-                if enabled {
-                    // Auto-populate from scan_capture screen
-                    if let Some(ref saved) = self.scan_capture_screen.last_saved_capture_path {
-                        if !saved.is_empty() {
-                            self.crack_screen.handshake_path = saved.clone();
-                        } else {
-                            self.crack_screen.handshake_path =
-                                self.scan_capture_screen.output_file.clone();
-                        }
-                    } else {
-                        self.crack_screen.handshake_path =
-                            self.scan_capture_screen.output_file.clone();
-                    }
-                }
-                self.persist_state();
-                Task::none()
-            }
             Message::HandshakePathChanged(path) => {
                 self.crack_screen.handshake_path = path;
                 self.persist_state();
@@ -895,7 +786,6 @@ impl BruteforceApp {
                     let path_str = p.display().to_string();
                     eprintln!("[DEBUG] Handshake file selected: {}", path_str);
                     self.crack_screen.handshake_path = path_str.clone();
-                    self.crack_screen.use_captured_file = false;
                     self.crack_screen
                         .log_messages
                         .push(format!("📁 Handshake file: {}", path_str));
@@ -1235,40 +1125,6 @@ impl BruteforceApp {
                 }
                 Task::none()
             }
-            Message::CopyLogs => {
-                let logs_text = self.crack_screen.log_messages.join("\n");
-                if !logs_text.is_empty() {
-                    // On macOS, clipboard::write may fail when running as root
-                    // Use pbcopy as a more reliable fallback
-                    #[cfg(target_os = "macos")]
-                    {
-                        use std::io::Write;
-                        use std::process::{Command, Stdio};
-
-                        if let Ok(mut child) = Command::new("pbcopy").stdin(Stdio::piped()).spawn()
-                        {
-                            if let Some(mut stdin) = child.stdin.take() {
-                                let _ = stdin.write_all(logs_text.as_bytes());
-                            }
-                            let _ = child.wait();
-                            self.crack_screen
-                                .log_messages
-                                .push("📋 Logs copied to clipboard".to_string());
-                            if self.crack_screen.log_messages.len() > 50 {
-                                self.crack_screen.log_messages.remove(0);
-                            }
-                            let new_logs_text = self.crack_screen.log_messages.join("\n");
-                            self.crack_screen.logs_content =
-                                text_editor::Content::with_text(&new_logs_text);
-                            return Task::none();
-                        }
-                    }
-
-                    // Fallback to Iced clipboard (works on non-macOS or if pbcopy fails)
-                    return clipboard::write(logs_text);
-                }
-                Task::none()
-            }
             Message::LogsEditorAction(action) => {
                 match self.screen {
                     Screen::Crack => {
@@ -1295,14 +1151,6 @@ impl BruteforceApp {
                         if !self.crack_screen.ssid.is_empty() {
                             envs.push(("BRUTIFI_SSID", self.crack_screen.ssid.clone()));
                         }
-                        envs.push((
-                            "BRUTIFI_USE_CAPTURED",
-                            if self.crack_screen.use_captured_file {
-                                "1".to_string()
-                            } else {
-                                "0".to_string()
-                            },
-                        ));
                         if !self.crack_screen.wordlist_path.is_empty() {
                             envs.push((
                                 "BRUTIFI_WORDLIST_PATH",
@@ -1450,7 +1298,6 @@ impl BruteforceApp {
         if !state.crack.handshake_path.is_empty() {
             self.crack_screen.handshake_path = state.crack.handshake_path;
         }
-        self.crack_screen.use_captured_file = state.crack.use_captured_file;
         self.crack_screen.ssid = state.crack.ssid;
         self.crack_screen.engine = state.crack.engine;
         self.crack_screen.method = state.crack.method;
@@ -1485,7 +1332,6 @@ impl BruteforceApp {
             },
             crack: PersistedCrackState {
                 handshake_path: self.crack_screen.handshake_path.clone(),
-                use_captured_file: self.crack_screen.use_captured_file,
                 ssid: self.crack_screen.ssid.clone(),
                 engine: self.crack_screen.engine,
                 method: self.crack_screen.method,

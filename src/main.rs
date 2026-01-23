@@ -9,6 +9,7 @@
  */
 
 mod app;
+mod persistence;
 mod screens;
 mod theme;
 mod workers;
