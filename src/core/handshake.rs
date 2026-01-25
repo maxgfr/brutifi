@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 /// - ANonce and SNonce (random nonces from the handshake)
 /// - MIC (Message Integrity Code to verify password)
 /// - EAPOL frame for MIC calculation
+/// - Optional PMKID (for client-less attacks)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Handshake {
     /// Network SSID (used in PMK derivation)
@@ -41,6 +42,11 @@ pub struct Handshake {
 
     /// Key version (1 = HMAC-MD5, 2 = HMAC-SHA1, 3 = AES-CMAC)
     pub key_version: u8,
+
+    /// PMKID (optional, for client-less PMKID attacks)
+    /// PMKID = HMAC-SHA1-128(PMK, "PMK Name" | MAC_AP | MAC_STA)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pmkid: Option<[u8; 16]>,
 }
 
 impl Handshake {
@@ -160,6 +166,45 @@ pub struct EapolPacket {
     pub key_version: u8,
     pub message_type: u8, // 1=M1, 2=M2, 3=M3, 4=M4
     pub replay_counter: u64,
+    pub pmkid: Option<[u8; 16]>, // PMKID from RSN IE in Key Data
+}
+
+/// Extract PMKID from EAPOL Key Data field
+/// PMKID is found in the RSN IE (tag 0xDD) within the Key Data
+fn extract_pmkid_from_key_data(key_data: &[u8]) -> Option<[u8; 16]> {
+    let mut i = 0;
+    while i < key_data.len() {
+        if i + 2 > key_data.len() {
+            break;
+        }
+
+        let tag = key_data[i];
+        let len = key_data[i + 1] as usize;
+
+        if i + 2 + len > key_data.len() {
+            break;
+        }
+
+        // Look for Vendor Specific tag (0xDD) containing PMKID
+        if tag == 0xDD && len >= 20 {
+            // Vendor Specific: OUI (3 bytes) + Type (1 byte) + Data
+            let oui = &key_data[i + 2..i + 5];
+            let vendor_type = key_data[i + 5];
+
+            // Microsoft OUI (00:50:F2) with type 4 (PMKID)
+            if oui == [0x00, 0x50, 0xF2] && vendor_type == 0x04 {
+                // PMKID is 16 bytes starting at offset i+6
+                if i + 2 + len >= i + 22 {
+                    let pmkid: [u8; 16] = key_data[i + 6..i + 22].try_into().ok()?;
+                    return Some(pmkid);
+                }
+            }
+        }
+
+        i += 2 + len;
+    }
+
+    None
 }
 
 /// Extract EAPOL packet from raw packet data
@@ -319,6 +364,17 @@ pub fn extract_eapol_from_packet(data: &[u8]) -> Option<EapolPacket> {
         mic = Some(eapol_data[81..97].to_vec());
     }
 
+    // Extract PMKID from Key Data (if present in M1 or M3)
+    let mut pmkid: Option<[u8; 16]> = None;
+    if (message_type == 1 || message_type == 3) && eapol_data.len() > 99 {
+        // Key Data Length at offset 97-98
+        let key_data_len = u16::from_be_bytes([eapol_data[97], eapol_data[98]]) as usize;
+        if eapol_data.len() >= 99 + key_data_len {
+            let key_data = &eapol_data[99..99 + key_data_len];
+            pmkid = extract_pmkid_from_key_data(key_data);
+        }
+    }
+
     Some(EapolPacket {
         ap_mac,
         client_mac,
@@ -329,6 +385,7 @@ pub fn extract_eapol_from_packet(data: &[u8]) -> Option<EapolPacket> {
         key_version,
         message_type,
         replay_counter,
+        pmkid,
     })
 }
 
@@ -338,6 +395,59 @@ fn build_handshake_from_eapol(
     ssid: Option<&str>,
     bssid_map: &std::collections::HashMap<[u8; 6], String>,
 ) -> Result<Handshake> {
+    // First, try to find PMKID (client-less attack, faster and more reliable)
+    for packet in packets {
+        if packet.message_type == 1 && packet.pmkid.is_some() {
+            let ap_mac = packet.ap_mac;
+            let client_mac = packet.client_mac;
+            let pmkid = packet.pmkid.unwrap();
+
+            // Determine SSID
+            let ssid_str = if let Some(s) = ssid {
+                if let Some(detected) = bssid_map.get(&ap_mac) {
+                    if s != detected {
+                        println!("\n⚠️  WARNING: Provided SSID '{}' does not match the SSID '{}' broadcasted by the target AP ({:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X})",
+                            s, detected, ap_mac[0], ap_mac[1], ap_mac[2], ap_mac[3], ap_mac[4], ap_mac[5]);
+                        println!("   Using provided SSID. If cracking fails, rely on the detected SSID.\n");
+                    }
+                }
+                s.to_string()
+            } else {
+                match bssid_map.get(&ap_mac) {
+                    Some(s) => {
+                        println!("✨ Auto-detected SSID for target AP: {}", s);
+                        s.clone()
+                    },
+                    None => return Err(anyhow!("SSID not found for target AP ({:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}). Please provide --ssid.",
+                        ap_mac[0], ap_mac[1], ap_mac[2], ap_mac[3], ap_mac[4], ap_mac[5]))
+                }
+            };
+
+            println!("\n🎯 PMKID FOUND! (client-less attack)");
+            println!(
+                "   AP: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                ap_mac[0], ap_mac[1], ap_mac[2], ap_mac[3], ap_mac[4], ap_mac[5]
+            );
+            println!("   PMKID: {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                pmkid[0], pmkid[1], pmkid[2], pmkid[3], pmkid[4], pmkid[5], pmkid[6], pmkid[7],
+                pmkid[8], pmkid[9], pmkid[10], pmkid[11], pmkid[12], pmkid[13], pmkid[14], pmkid[15]);
+
+            // Return a PMKID-only handshake (use dummy values for unused fields)
+            return Ok(Handshake {
+                ssid: ssid_str,
+                ap_mac,
+                client_mac,
+                anonce: [0; 32],     // Not used for PMKID attacks
+                snonce: [0; 32],     // Not used for PMKID attacks
+                mic: vec![],         // Not used for PMKID attacks
+                eapol_frame: vec![], // Not used for PMKID attacks
+                key_version: packet.key_version,
+                pmkid: Some(pmkid),
+            });
+        }
+    }
+
+    // If no PMKID found, try traditional 4-way handshake
     // Collect all potential M2 candidates along with their indices
     let m2_candidates: Vec<(usize, &EapolPacket)> = packets
         .iter()
@@ -346,7 +456,9 @@ fn build_handshake_from_eapol(
         .collect();
 
     if m2_candidates.is_empty() {
-        return Err(anyhow!("Message 2 (SNonce + MIC) not found in handshake"));
+        return Err(anyhow!(
+            "Neither PMKID nor complete handshake (Message 2 with SNonce + MIC) found in capture"
+        ));
     }
 
     // Iterate through all M2 candidates to find one with a matching M1
@@ -426,10 +538,130 @@ fn build_handshake_from_eapol(
                 mic,
                 eapol_frame,
                 key_version,
+                pmkid: None, // Traditional handshake doesn't use PMKID
             });
         }
     }
 
     // If we reach here, we found M2(s) but no matching M1s
     Err(anyhow!("Found valid Message 2 packets, but could not find any corresponding Message 1 (Replay Counter mismatch)"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_pmkid_from_key_data() {
+        // Test valid PMKID in key data
+        // Format: Tag (0xDD) | Length | OUI (00:50:F2) | Type (0x04) | PMKID (16 bytes)
+        let mut key_data = vec![
+            0xDD, // Tag: Vendor Specific
+            0x14, // Length: 20 bytes (OUI + Type + PMKID)
+            0x00, 0x50, 0xF2, // Microsoft OUI
+            0x04, // Type: PMKID
+            // PMKID (16 bytes)
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10,
+        ];
+
+        let pmkid = extract_pmkid_from_key_data(&key_data);
+        assert!(pmkid.is_some());
+        assert_eq!(
+            pmkid.unwrap(),
+            [
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+                0x0F, 0x10
+            ]
+        );
+
+        // Test with other tags before PMKID
+        key_data = vec![
+            0x30, 0x04, 0x01, 0x02, 0x03, 0x04, // Some other tag
+            0xDD, 0x14, 0x00, 0x50, 0xF2, 0x04, // PMKID tag
+            0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E,
+            0x1F, 0x20,
+        ];
+
+        let pmkid = extract_pmkid_from_key_data(&key_data);
+        assert!(pmkid.is_some());
+        assert_eq!(
+            pmkid.unwrap(),
+            [
+                0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E,
+                0x1F, 0x20
+            ]
+        );
+
+        // Test invalid OUI
+        let key_data_invalid_oui = vec![
+            0xDD, 0x14, 0x00, 0x50, 0xF3, // Wrong OUI (should be 00:50:F2)
+            0x04, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
+            0x0E, 0x0F, 0x10,
+        ];
+
+        let pmkid = extract_pmkid_from_key_data(&key_data_invalid_oui);
+        assert!(pmkid.is_none());
+
+        // Test invalid type
+        let key_data_invalid_type = vec![
+            0xDD, 0x14, 0x00, 0x50, 0xF2, 0x05, // Wrong type (should be 0x04)
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10,
+        ];
+
+        let pmkid = extract_pmkid_from_key_data(&key_data_invalid_type);
+        assert!(pmkid.is_none());
+
+        // Test empty data
+        let pmkid = extract_pmkid_from_key_data(&[]);
+        assert!(pmkid.is_none());
+    }
+
+    #[test]
+    fn test_handshake_serialization() {
+        // Test PMKID handshake serialization
+        let handshake = Handshake {
+            ssid: "TestNetwork".to_string(),
+            ap_mac: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
+            client_mac: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+            anonce: [0; 32],
+            snonce: [0; 32],
+            mic: vec![],
+            eapol_frame: vec![],
+            key_version: 2,
+            pmkid: Some([
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+                0x0F, 0x10,
+            ]),
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&handshake).unwrap();
+        assert!(json.contains("pmkid"));
+        assert!(json.contains("TestNetwork"));
+
+        // Deserialize back
+        let deserialized: Handshake = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.ssid, "TestNetwork");
+        assert!(deserialized.pmkid.is_some());
+        assert_eq!(deserialized.pmkid.unwrap(), handshake.pmkid.unwrap());
+
+        // Test traditional handshake (no PMKID)
+        let handshake_no_pmkid = Handshake {
+            ssid: "TestNetwork2".to_string(),
+            ap_mac: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
+            client_mac: [0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+            anonce: [1; 32],
+            snonce: [2; 32],
+            mic: vec![0x01, 0x02, 0x03, 0x04],
+            eapol_frame: vec![0x05, 0x06],
+            key_version: 2,
+            pmkid: None,
+        };
+
+        let json = serde_json::to_string(&handshake_no_pmkid).unwrap();
+        // pmkid should be omitted when None (skip_serializing_if)
+        assert!(!json.contains("pmkid"));
+    }
 }
