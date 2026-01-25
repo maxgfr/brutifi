@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.14.2](https://github.com/maxgfr/brutifi/compare/v1.14.1...v1.14.2) (2026-01-25)
+
+
+### 🐛 Bug Fixes
+
+* correct syntax for heredoc in Info.plist generation ([8c5d995](https://github.com/maxgfr/brutifi/commit/8c5d995549b00ab89eea380b7bd44c4cf258ebcb))
+
 ## [1.14.1](https://github.com/maxgfr/brutifi/compare/v1.14.0...v1.14.1) (2026-01-25)
 
 
