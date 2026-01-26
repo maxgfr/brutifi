@@ -61,10 +61,8 @@ impl BruteforceApp {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-            let output_file = std::path::PathBuf::from(format!(
-                "/tmp/wpa3_capture_{}.pcapng",
-                timestamp
-            ));
+            let output_file =
+                std::path::PathBuf::from(format!("/tmp/wpa3_capture_{}.pcapng", timestamp));
 
             // Create attack parameters
             let params = brutifi::Wpa3AttackParams {

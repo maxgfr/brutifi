@@ -1,6 +1,7 @@
 // Core library modules
 pub mod bruteforce;
 pub mod crypto;
+pub mod evil_twin;
 pub mod handshake;
 pub mod hashcat;
 pub mod network;
@@ -12,6 +13,12 @@ pub mod wps;
 // Re-exports
 pub use bruteforce::OfflineBruteForcer;
 pub use crypto::{calculate_mic, calculate_pmk, calculate_ptk, verify_password};
+pub use evil_twin::{
+    check_dnsmasq_installed, check_hostapd_installed, configure_interface, generate_dnsmasq_config,
+    generate_hostapd_config, get_dnsmasq_version, get_hostapd_version, run_evil_twin_attack,
+    start_dnsmasq, start_hostapd, validate_password_against_ap, CapturedCredential, EvilTwinParams,
+    EvilTwinProgress, EvilTwinResult, EvilTwinState, PortalTemplate,
+};
 pub use handshake::{extract_eapol_from_packet, parse_cap_file, EapolPacket, Handshake};
 pub use hashcat::{
     are_external_tools_available, convert_to_hashcat_format, crack_with_hashcat, HashcatParams,
