@@ -6,6 +6,7 @@
 
 mod capture;
 mod crack;
+mod evil_twin;
 mod general;
 mod navigation;
 mod scan;

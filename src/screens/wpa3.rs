@@ -47,6 +47,7 @@ impl From<Wpa3AttackMethod> for Wpa3AttackType {
 
 /// WPA3 attack screen state
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Wpa3Screen {
     pub bssid: String,
     pub channel: String,
@@ -98,6 +99,7 @@ impl Default for Wpa3Screen {
 }
 
 impl Wpa3Screen {
+    #[allow(dead_code)]
     pub fn view(&self, is_root: bool) -> Element<'_, Message> {
         let title = text("WPA3-SAE Attack").size(28).color(colors::TEXT);
 
@@ -526,6 +528,7 @@ impl Wpa3Screen {
     }
 
     /// Update from WPA3 result
+    #[allow(dead_code)]
     pub fn update_from_result(&mut self, result: &Wpa3Result) {
         self.is_attacking = false;
         self.attack_finished = true;

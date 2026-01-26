@@ -182,29 +182,4 @@ impl BruteforceApp {
 
         Task::none()
     }
-
-    /// Handle navigation to WPS screen
-    pub fn handle_go_to_wps(&mut self) -> Task<Message> {
-        // Initialize WPS screen if not already done
-        if self.wps_screen.is_none() {
-            self.wps_screen = Some(crate::screens::WpsScreen::default());
-        }
-
-        // Stop any ongoing attacks
-        if let Some(ref mut wps_screen) = self.wps_screen {
-            if wps_screen.is_attacking {
-                if let Some(ref state) = self.wps_state {
-                    state.stop();
-                }
-                wps_screen.is_attacking = false;
-                self.wps_state = None;
-                self.wps_progress_rx = None;
-            }
-        }
-
-        // Update screen
-        self.screen = crate::app::Screen::Wps;
-
-        Task::none()
-    }
 }

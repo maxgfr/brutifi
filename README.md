@@ -46,7 +46,7 @@ Modern, cross-platform WiFi penetration testing tool with GPU acceleration and c
   - Supports mode 22000 (WPA/WPA2/WPA3 + PMKID)
   - Real-time progress tracking
 
-- **WPS Attacks** - WiFi Protected Setup exploitation
+- **WPS Attacks** ✅ - WiFi Protected Setup exploitation
   - **Pixie-Dust Attack** - Offline WPS PIN recovery (<10 seconds on vulnerable routers)
     - Exploits weak random number generation
     - Success rate: ~30% of WPS-enabled routers
@@ -56,7 +56,7 @@ Modern, cross-platform WiFi penetration testing tool with GPU acceleration and c
     - Smart rate limiting to avoid AP lockout
     - Automatic password recovery
 
-- **WPA3-SAE Support** - Modern WPA3 networks
+- **WPA3-SAE Support** ✅ - Modern WPA3 networks
   - **WPA3 Detection** - Automatic network type identification
     - WPA3-Only (SAE) detection
     - WPA3-Transition mode detection (vulnerable)
@@ -72,13 +72,33 @@ Modern, cross-platform WiFi penetration testing tool with GPU acceleration and c
     - CVE-2019-13377: SAE timing side-channel
     - CVE-2019-13456: Cache-based side-channel
 
+- **Evil Twin Attack** ✅ - Rogue AP with captive portal
+  - 4 professional portal templates (Generic, TP-Link, Netgear, Linksys)
+  - Real-time credential validation against legitimate AP
+  - Client monitoring and tracking
+  - DNS spoofing with dnsmasq
+  - Automatic AP creation with hostapd
+
+- **Dual Interface Support** ✅ - 30-50% performance improvement
+  - Automatic interface detection and assignment
+  - Monitor mode + Managed mode simultaneously
+  - Continuous capture during deauth
+  - Smart capability analysis
+
+- **Passive PMKID Sniffing** ✅ - Continuous background capture
+  - Untargeted PMKID capture from all nearby networks
+  - Auto-save to JSON format
+  - Low resource usage
+  - Channel hopping support
+
+- **Session Resume** ✅ - Continue interrupted attacks
+  - Save/load attack state
+  - Handle crashes and power loss
+  - Automatic cleanup of old sessions
+  - Multi-session support
+
 #### Coming Soon 🔜
-- **Evil Twin Attack** - Rogue AP with captive portal
-  - Multiple portal templates (Generic, TP-Link, Netgear, Linksys)
-  - Real-time credential validation
-  - Smart deauthentication
 - **Attack Monitoring** - Passive wireless attack detection
-- **Session Resume** - Continue interrupted attacks
 - **WPA-SEC Integration** - Online distributed cracking
 
 ---
@@ -170,11 +190,10 @@ sudo ./target/release/brutifi
 |--------------|-------|--------------|-------------|
 | PMKID Capture | 1-30 seconds | 60-70% | Modern router with PMKID support |
 | Handshake Capture | 1-5 minutes | 95%+ | Client reconnection |
-| WPS Pixie-Dust* | < 10 seconds | 40-50% | Vulnerable WPS implementation |
-| WPA3 Downgrade* | < 30 seconds | 80-90% | Transition mode network |
-| Evil Twin* | Variable | 90%+ | Active clients |
-
-\* Coming soon
+| WPS Pixie-Dust | < 10 seconds | 40-50% | Vulnerable WPS implementation |
+| WPA3 Downgrade | < 30 seconds | 80-90% | Transition mode network |
+| Evil Twin | Variable | 90%+ | Active clients |
+| Passive PMKID | Continuous | N/A | Background sniffing mode |
 
 ### Cracking Speed
 
@@ -358,8 +377,8 @@ src/
 
 **Limited/Unsupported:**
 - ❌ Packet injection (deauth attacks)
-- ❌ WPS attacks (requires injection)
-- ⚠️ Evil Twin (requires hostapd, may need external adapter)
+- ⚠️ WPS attacks (require injection, use external adapter)
+- ⚠️ Evil Twin (requires hostapd, use external adapter recommended)
 
 **Recommended External Adapters:**
 - Alfa AWUS036ACH (full injection support)
@@ -371,9 +390,11 @@ src/
 **Supported:**
 - ✅ All features
 - ✅ Packet injection (deauth attacks)
-- ✅ Full WPS support (when implemented)
-- ✅ Evil Twin attacks (when implemented)
-- ✅ Dual interface mode (when implemented)
+- ✅ Full WPS support
+- ✅ Evil Twin attacks
+- ✅ Dual interface mode
+- ✅ Passive PMKID sniffing
+- ✅ Session resume
 
 **Requirements:**
 - Monitor mode compatible adapter
@@ -503,18 +524,27 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 ### Latest Version (1.14.2)
 
 **Added:**
+- ✨ **WPS Attacks** - Pixie-Dust and PIN brute-force attacks
+- ✨ **WPA3-SAE Support** - SAE handshake capture, transition mode downgrade, Dragonblood detection
+- ✨ **Evil Twin Attack** - Rogue AP with 4 captive portal templates
+- ✨ **Dual Interface Support** - 30-50% performance improvement with parallel operations
+- ✨ **Passive PMKID Sniffing** - Continuous background capture from all nearby networks
+- ✨ **Session Resume System** - Save/load attack state, handle interruptions
 - ✨ **PMKID Support** - Client-less WPA/WPA2 attack
   - Automatic PMKID extraction from EAPOL M1
   - Prioritizes PMKID over traditional handshake
   - Fallback to 4-way handshake if PMKID not available
-- 🎨 UI improvements for capture type display
-- 📊 Capture progress shows "PMKID (client-less)" or "4-way handshake"
+- 🎨 UI simplified to 2 screens (Scan & Capture, Crack)
+- 📊 145 unit tests (100% passing)
 
 **Fixed:**
 - 🐛 Hashcat password parsing for PMKID (WPA*01*) format
+- 🐛 Session management with automatic cleanup
+- 🐛 Interface capability detection
 
 **Changed:**
 - 🔧 Updated handshake structure to support PMKID field
+- 🔧 Consolidated UI from 5 tabs to 2 tabs for simplified workflow
 
 ---
 

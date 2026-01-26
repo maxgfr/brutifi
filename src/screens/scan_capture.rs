@@ -6,8 +6,8 @@
  */
 
 use iced::widget::{
-    button, column, container, horizontal_rule, horizontal_space, pick_list, row, scrollable, text,
-    Column,
+    button, checkbox, column, container, horizontal_rule, horizontal_space, pick_list, row,
+    scrollable, text, Column,
 };
 use iced::{Element, Length, Theme};
 
@@ -65,6 +65,10 @@ pub struct ScanCaptureScreen {
     // Channel selection for multi-channel networks
     pub available_channels: Vec<String>,
     pub selected_channel: Option<String>,
+
+    // Dual interface support
+    pub dual_interface_enabled: bool,
+    pub secondary_interface: Option<String>,
 }
 
 impl Default for ScanCaptureScreen {
@@ -86,6 +90,8 @@ impl Default for ScanCaptureScreen {
             last_saved_capture_path: None,
             available_channels: Vec::new(),
             selected_channel: None,
+            dual_interface_enabled: false,
+            secondary_interface: None,
         }
     }
 }
@@ -165,6 +171,27 @@ impl ScanCaptureScreen {
             interface_picker,
         ]
         .spacing(10)
+        .align_y(iced::Alignment::Center);
+
+        // Dual interface toggle
+        let dual_interface_toggle = row![
+            checkbox("Dual Interface Mode", self.dual_interface_enabled)
+                .on_toggle(Message::ToggleDualInterface)
+                .size(14)
+                .text_size(11),
+            if let Some(ref secondary) = self.secondary_interface {
+                text(format!("(Secondary: {})", secondary))
+                    .size(10)
+                    .color(colors::SUCCESS)
+            } else if self.dual_interface_enabled {
+                text("(No secondary interface)")
+                    .size(10)
+                    .color(colors::TEXT_DIM)
+            } else {
+                text("").size(10)
+            }
+        ]
+        .spacing(8)
         .align_y(iced::Alignment::Center);
 
         // Network list
@@ -274,7 +301,7 @@ impl ScanCaptureScreen {
             None
         };
 
-        let mut content = column![header, interface_row].spacing(10);
+        let mut content = column![header, interface_row, dual_interface_toggle].spacing(10);
 
         content = content.push(
             container(network_list)

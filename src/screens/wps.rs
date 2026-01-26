@@ -41,6 +41,7 @@ impl From<WpsAttackMethod> for WpsAttackType {
 
 /// WPS attack screen state
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct WpsScreen {
     pub bssid: String,
     pub channel: String,
@@ -90,6 +91,7 @@ impl Default for WpsScreen {
 }
 
 impl WpsScreen {
+    #[allow(dead_code)]
     pub fn view(&self, is_root: bool) -> Element<'_, Message> {
         let title = text("WPS Attack").size(28).color(colors::TEXT);
 
@@ -410,6 +412,7 @@ impl WpsScreen {
     }
 
     /// Update from WPS result
+    #[allow(dead_code)]
     pub fn update_from_result(&mut self, result: &WpsResult) {
         self.is_attacking = false;
         self.attack_finished = true;

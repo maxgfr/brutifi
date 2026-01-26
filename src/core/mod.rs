@@ -2,18 +2,25 @@
 pub mod bruteforce;
 pub mod captive_portal;
 pub mod crypto;
+pub mod dual_interface;
 pub mod evil_twin;
 pub mod handshake;
 pub mod hashcat;
 pub mod network;
+pub mod passive_pmkid;
 pub mod password_gen;
 pub mod security;
+pub mod session;
 pub mod wpa3;
 pub mod wps;
 
 // Re-exports
 pub use bruteforce::OfflineBruteForcer;
 pub use crypto::{calculate_mic, calculate_pmk, calculate_ptk, verify_password};
+pub use dual_interface::{
+    auto_assign_interfaces, detect_interface_capabilities, validate_manual_assignment,
+    DualInterfaceConfig, InterfaceAssignment, InterfaceCapabilities,
+};
 pub use evil_twin::{
     check_dnsmasq_installed, check_hostapd_installed, configure_interface, generate_dnsmasq_config,
     generate_hostapd_config, get_dnsmasq_version, get_hostapd_version, run_evil_twin_attack,
@@ -28,6 +35,15 @@ pub use hashcat::{
 pub use network::{
     capture_traffic, compact_duplicate_networks, disconnect_wifi, scan_networks,
     wifi_connected_ssid, CaptureOptions, WifiNetwork,
+};
+pub use passive_pmkid::{
+    check_hcxdumptool_available, load_captured_pmkids, run_passive_pmkid_capture,
+    save_captured_pmkids, CapturedPmkid, PassivePmkidConfig, PassivePmkidProgress,
+    PassivePmkidResult, PassivePmkidState,
+};
+pub use session::{
+    AttackType, SessionConfig, SessionData, SessionManager, SessionMetadata, SessionProgress,
+    SessionStatus,
 };
 pub use wpa3::{
     check_dragonblood_vulnerabilities, check_hcxdumptool_installed, check_hcxpcapngtool_installed,

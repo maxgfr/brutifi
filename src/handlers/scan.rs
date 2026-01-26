@@ -93,4 +93,44 @@ impl BruteforceApp {
         self.persist_state();
         Task::none()
     }
+
+    /// Handle dual interface toggle
+    pub fn handle_toggle_dual_interface(&mut self, enabled: bool) -> Task<Message> {
+        self.scan_capture_screen.dual_interface_enabled = enabled;
+
+        if enabled {
+            // Auto-assign secondary interface
+            let available: Vec<String> = self.scan_capture_screen.interface_list.clone();
+            let primary = self.scan_capture_screen.selected_interface.clone();
+
+            // Use auto-assignment logic
+            match brutifi::auto_assign_interfaces(&available) {
+                brutifi::InterfaceAssignment::Dual {
+                    primary: _,
+                    secondary,
+                } => {
+                    // Make sure secondary is different from primary
+                    if secondary != primary {
+                        self.scan_capture_screen.secondary_interface = Some(secondary);
+                    } else {
+                        // Find another interface
+                        self.scan_capture_screen.secondary_interface = available
+                            .iter()
+                            .find(|iface| iface.as_str() != primary)
+                            .cloned();
+                    }
+                }
+                brutifi::InterfaceAssignment::Single(_) => {
+                    // Only one interface available, disable dual mode
+                    self.scan_capture_screen.dual_interface_enabled = false;
+                    self.scan_capture_screen.secondary_interface = None;
+                }
+            }
+        } else {
+            self.scan_capture_screen.secondary_interface = None;
+        }
+
+        self.persist_state();
+        Task::none()
+    }
 }

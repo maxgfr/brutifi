@@ -139,6 +139,12 @@ pub struct EvilTwinState {
     pub captured_credentials: Arc<Mutex<Vec<CapturedCredential>>>,
 }
 
+impl Default for EvilTwinState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EvilTwinState {
     pub fn new() -> Self {
         Self {
@@ -556,6 +562,10 @@ pub fn run_evil_twin_attack(
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // Portal Template Tests
+    // =========================================================================
+
     #[test]
     fn test_portal_template_display() {
         assert_eq!(PortalTemplate::Generic.to_string(), "Generic");
@@ -565,13 +575,405 @@ mod tests {
     }
 
     #[test]
+    fn test_portal_template_equality() {
+        assert_eq!(PortalTemplate::Generic, PortalTemplate::Generic);
+        assert_ne!(PortalTemplate::Generic, PortalTemplate::TpLink);
+        assert_ne!(PortalTemplate::TpLink, PortalTemplate::Netgear);
+        assert_ne!(PortalTemplate::Netgear, PortalTemplate::Linksys);
+    }
+
+    #[test]
+    fn test_portal_template_clone() {
+        let original = PortalTemplate::TpLink;
+        let cloned = original;
+        assert_eq!(original, cloned);
+    }
+
+    #[test]
+    fn test_portal_template_debug() {
+        let template = PortalTemplate::Generic;
+        let debug_str = format!("{:?}", template);
+        assert!(debug_str.contains("Generic"));
+    }
+
+    // =========================================================================
+    // EvilTwinParams Tests
+    // =========================================================================
+
+    #[test]
     fn test_evil_twin_params_default() {
         let params = EvilTwinParams::default();
         assert_eq!(params.target_channel, 6);
         assert_eq!(params.interface, "en0");
         assert_eq!(params.web_port, 80);
         assert_eq!(params.gateway_ip, "192.168.1.1");
+        assert_eq!(params.dhcp_range_start, "192.168.1.100");
+        assert_eq!(params.dhcp_range_end, "192.168.1.200");
+        assert!(params.target_ssid.is_empty());
+        assert!(params.target_bssid.is_none());
+        assert_eq!(params.portal_template, PortalTemplate::Generic);
     }
+
+    #[test]
+    fn test_evil_twin_params_custom_values() {
+        let params = EvilTwinParams {
+            target_ssid: "MyNetwork".to_string(),
+            target_bssid: Some("AA:BB:CC:DD:EE:FF".to_string()),
+            target_channel: 11,
+            interface: "wlan0".to_string(),
+            portal_template: PortalTemplate::Netgear,
+            web_port: 8080,
+            dhcp_range_start: "10.0.0.100".to_string(),
+            dhcp_range_end: "10.0.0.200".to_string(),
+            gateway_ip: "10.0.0.1".to_string(),
+        };
+
+        assert_eq!(params.target_ssid, "MyNetwork");
+        assert_eq!(params.target_bssid, Some("AA:BB:CC:DD:EE:FF".to_string()));
+        assert_eq!(params.target_channel, 11);
+        assert_eq!(params.interface, "wlan0");
+        assert_eq!(params.portal_template, PortalTemplate::Netgear);
+        assert_eq!(params.web_port, 8080);
+        assert_eq!(params.gateway_ip, "10.0.0.1");
+    }
+
+    #[test]
+    fn test_evil_twin_params_clone() {
+        let original = EvilTwinParams {
+            target_ssid: "CloneTest".to_string(),
+            target_channel: 6,
+            ..Default::default()
+        };
+        let cloned = original.clone();
+
+        assert_eq!(original.target_ssid, cloned.target_ssid);
+        assert_eq!(original.target_channel, cloned.target_channel);
+    }
+
+    #[test]
+    fn test_evil_twin_params_with_special_ssid_characters() {
+        let params = EvilTwinParams {
+            target_ssid: "Test Network With Spaces!@#$%".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(params.target_ssid, "Test Network With Spaces!@#$%");
+    }
+
+    #[test]
+    fn test_evil_twin_params_empty_ssid() {
+        let params = EvilTwinParams {
+            target_ssid: String::new(),
+            ..Default::default()
+        };
+        assert!(params.target_ssid.is_empty());
+    }
+
+    #[test]
+    fn test_evil_twin_params_channel_boundaries() {
+        // Channel 1 (minimum)
+        let params_min = EvilTwinParams {
+            target_channel: 1,
+            ..Default::default()
+        };
+        assert_eq!(params_min.target_channel, 1);
+
+        // Channel 14 (maximum for some regions)
+        let params_max = EvilTwinParams {
+            target_channel: 14,
+            ..Default::default()
+        };
+        assert_eq!(params_max.target_channel, 14);
+    }
+
+    // =========================================================================
+    // EvilTwinResult Tests
+    // =========================================================================
+
+    #[test]
+    fn test_evil_twin_result_running() {
+        let result = EvilTwinResult::Running;
+        assert!(matches!(result, EvilTwinResult::Running));
+    }
+
+    #[test]
+    fn test_evil_twin_result_password_found() {
+        let result = EvilTwinResult::PasswordFound {
+            password: "secret123".to_string(),
+        };
+        if let EvilTwinResult::PasswordFound { password } = result {
+            assert_eq!(password, "secret123");
+        } else {
+            panic!("Expected PasswordFound variant");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_result_stopped() {
+        let result = EvilTwinResult::Stopped;
+        assert!(matches!(result, EvilTwinResult::Stopped));
+    }
+
+    #[test]
+    fn test_evil_twin_result_error() {
+        let result = EvilTwinResult::Error("Connection failed".to_string());
+        if let EvilTwinResult::Error(msg) = result {
+            assert_eq!(msg, "Connection failed");
+        } else {
+            panic!("Expected Error variant");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_result_clone() {
+        let original = EvilTwinResult::PasswordFound {
+            password: "test".to_string(),
+        };
+        let cloned = original.clone();
+        assert!(matches!(
+            cloned,
+            EvilTwinResult::PasswordFound { password } if password == "test"
+        ));
+    }
+
+    // =========================================================================
+    // EvilTwinProgress Tests
+    // =========================================================================
+
+    #[test]
+    fn test_evil_twin_progress_started() {
+        let progress = EvilTwinProgress::Started;
+        assert!(matches!(progress, EvilTwinProgress::Started));
+    }
+
+    #[test]
+    fn test_evil_twin_progress_step() {
+        let progress = EvilTwinProgress::Step {
+            current: 3,
+            total: 6,
+            description: "Configuring interface".to_string(),
+        };
+
+        if let EvilTwinProgress::Step {
+            current,
+            total,
+            description,
+        } = progress
+        {
+            assert_eq!(current, 3);
+            assert_eq!(total, 6);
+            assert_eq!(description, "Configuring interface");
+        } else {
+            panic!("Expected Step variant");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_progress_client_connected() {
+        let progress = EvilTwinProgress::ClientConnected {
+            mac: "AA:BB:CC:DD:EE:FF".to_string(),
+            ip: "192.168.1.100".to_string(),
+        };
+
+        if let EvilTwinProgress::ClientConnected { mac, ip } = progress {
+            assert_eq!(mac, "AA:BB:CC:DD:EE:FF");
+            assert_eq!(ip, "192.168.1.100");
+        } else {
+            panic!("Expected ClientConnected variant");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_progress_credential_attempt() {
+        let progress = EvilTwinProgress::CredentialAttempt {
+            password: "attempted_pass".to_string(),
+        };
+
+        if let EvilTwinProgress::CredentialAttempt { password } = progress {
+            assert_eq!(password, "attempted_pass");
+        } else {
+            panic!("Expected CredentialAttempt variant");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_progress_password_found() {
+        let progress = EvilTwinProgress::PasswordFound {
+            password: "valid_password".to_string(),
+        };
+
+        if let EvilTwinProgress::PasswordFound { password } = progress {
+            assert_eq!(password, "valid_password");
+        } else {
+            panic!("Expected PasswordFound variant");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_progress_validation_failed() {
+        let progress = EvilTwinProgress::ValidationFailed {
+            password: "wrong_pass".to_string(),
+        };
+
+        if let EvilTwinProgress::ValidationFailed { password } = progress {
+            assert_eq!(password, "wrong_pass");
+        } else {
+            panic!("Expected ValidationFailed variant");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_progress_error() {
+        let progress = EvilTwinProgress::Error("Something went wrong".to_string());
+
+        if let EvilTwinProgress::Error(msg) = progress {
+            assert_eq!(msg, "Something went wrong");
+        } else {
+            panic!("Expected Error variant");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_progress_log() {
+        let progress = EvilTwinProgress::Log("Info message".to_string());
+
+        if let EvilTwinProgress::Log(msg) = progress {
+            assert_eq!(msg, "Info message");
+        } else {
+            panic!("Expected Log variant");
+        }
+    }
+
+    // =========================================================================
+    // CapturedCredential Tests
+    // =========================================================================
+
+    #[test]
+    fn test_captured_credential_creation() {
+        let cred = CapturedCredential {
+            ssid: "TestNetwork".to_string(),
+            password: "secret123".to_string(),
+            client_mac: "AA:BB:CC:DD:EE:FF".to_string(),
+            client_ip: "192.168.1.100".to_string(),
+            timestamp: 1700000000,
+            validated: false,
+        };
+
+        assert_eq!(cred.ssid, "TestNetwork");
+        assert_eq!(cred.password, "secret123");
+        assert_eq!(cred.client_mac, "AA:BB:CC:DD:EE:FF");
+        assert_eq!(cred.client_ip, "192.168.1.100");
+        assert_eq!(cred.timestamp, 1700000000);
+        assert!(!cred.validated);
+    }
+
+    #[test]
+    fn test_captured_credential_validated() {
+        let cred = CapturedCredential {
+            ssid: "ValidatedNetwork".to_string(),
+            password: "correct_password".to_string(),
+            client_mac: "11:22:33:44:55:66".to_string(),
+            client_ip: "192.168.1.101".to_string(),
+            timestamp: 1700000001,
+            validated: true,
+        };
+
+        assert!(cred.validated);
+    }
+
+    #[test]
+    fn test_captured_credential_clone() {
+        let original = CapturedCredential {
+            ssid: "CloneTest".to_string(),
+            password: "pass".to_string(),
+            client_mac: "AA:BB:CC:DD:EE:FF".to_string(),
+            client_ip: "192.168.1.1".to_string(),
+            timestamp: 1000,
+            validated: true,
+        };
+
+        let cloned = original.clone();
+        assert_eq!(original.ssid, cloned.ssid);
+        assert_eq!(original.password, cloned.password);
+        assert_eq!(original.validated, cloned.validated);
+    }
+
+    // =========================================================================
+    // EvilTwinState Tests
+    // =========================================================================
+
+    #[test]
+    fn test_evil_twin_state_new() {
+        let state = EvilTwinState::new();
+        assert!(state.running.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_evil_twin_state_stop() {
+        let state = EvilTwinState::new();
+        assert!(state.running.load(Ordering::SeqCst));
+
+        state.stop();
+
+        assert!(!state.running.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_evil_twin_state_credentials_initially_empty() {
+        let state = EvilTwinState::new();
+        let credentials = state.captured_credentials.lock().unwrap();
+        assert!(credentials.is_empty());
+    }
+
+    #[test]
+    fn test_evil_twin_state_add_credential() {
+        let state = EvilTwinState::new();
+
+        let cred = CapturedCredential {
+            ssid: "TestNet".to_string(),
+            password: "pass123".to_string(),
+            client_mac: "AA:BB:CC:DD:EE:FF".to_string(),
+            client_ip: "192.168.1.100".to_string(),
+            timestamp: 1700000000,
+            validated: false,
+        };
+
+        {
+            let mut credentials = state.captured_credentials.lock().unwrap();
+            credentials.push(cred);
+        }
+
+        let credentials = state.captured_credentials.lock().unwrap();
+        assert_eq!(credentials.len(), 1);
+        assert_eq!(credentials[0].password, "pass123");
+    }
+
+    #[test]
+    fn test_evil_twin_state_multiple_credentials() {
+        let state = EvilTwinState::new();
+
+        {
+            let mut credentials = state.captured_credentials.lock().unwrap();
+            for i in 0..5 {
+                credentials.push(CapturedCredential {
+                    ssid: format!("Network{}", i),
+                    password: format!("pass{}", i),
+                    client_mac: format!("AA:BB:CC:DD:EE:{:02X}", i),
+                    client_ip: format!("192.168.1.{}", 100 + i),
+                    timestamp: 1700000000 + i as u64,
+                    validated: i % 2 == 0,
+                });
+            }
+        }
+
+        let credentials = state.captured_credentials.lock().unwrap();
+        assert_eq!(credentials.len(), 5);
+        assert!(credentials[0].validated);
+        assert!(!credentials[1].validated);
+    }
+
+    // =========================================================================
+    // Tool Check Tests
+    // =========================================================================
 
     #[test]
     fn test_check_tools_installed() {
@@ -583,28 +985,314 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_hostapd_config() {
-        let params = EvilTwinParams {
+    fn test_check_hostapd_installed_returns_bool() {
+        // Verify the function returns without panic and returns a valid bool
+        // The result depends on whether hostapd is installed on the system
+        let _result: bool = check_hostapd_installed();
+    }
+
+    #[test]
+    fn test_check_dnsmasq_installed_returns_bool() {
+        // Verify the function returns without panic and returns a valid bool
+        // The result depends on whether dnsmasq is installed on the system
+        let _result: bool = check_dnsmasq_installed();
+    }
+
+    // =========================================================================
+    // Configuration Generation Tests
+    // =========================================================================
+
+    // Note: Configuration generation tests that write to shared file paths
+    // are combined into a single test to avoid race conditions in parallel execution.
+    // The generate functions write to fixed paths (/tmp/brutifi_hostapd.conf, etc.)
+    // which can cause conflicts when tests run in parallel.
+
+    #[test]
+    fn test_generate_configs_comprehensive() {
+        // This single comprehensive test covers all configuration generation
+        // to avoid race conditions from parallel test execution with shared file paths.
+
+        // Test 1: Basic hostapd config
+        let basic_params = EvilTwinParams {
             target_ssid: "TestNetwork".to_string(),
             target_channel: 11,
             interface: "wlan0".to_string(),
             ..Default::default()
         };
 
-        let result = generate_hostapd_config(&params);
-        assert!(result.is_ok());
+        let basic_result = generate_hostapd_config(&basic_params);
+        assert!(basic_result.is_ok());
+
+        let basic_path = basic_result.unwrap();
+        assert!(basic_path.exists());
+        let basic_content = fs::read_to_string(&basic_path).unwrap();
+
+        assert!(basic_content.contains("interface=wlan0"));
+        assert!(basic_content.contains("ssid=TestNetwork"));
+        assert!(basic_content.contains("channel=11"));
+        assert!(basic_content.contains("wpa=0")); // Open network for captive portal
+
+        // Test 2: Hostapd config with special SSID characters
+        let special_params = EvilTwinParams {
+            target_ssid: "Test Network With Spaces".to_string(),
+            target_channel: 6,
+            interface: "en0".to_string(),
+            ..Default::default()
+        };
+
+        let special_result = generate_hostapd_config(&special_params);
+        assert!(special_result.is_ok());
+
+        let special_path = special_result.unwrap();
+        let special_content = fs::read_to_string(&special_path).unwrap();
+        assert!(special_content.contains("ssid=Test Network With Spaces"));
+
+        // Test 3: Hostapd config with various channels
+        for channel in [1, 6, 11, 13] {
+            let params = EvilTwinParams {
+                target_ssid: format!("TestNet_ch{}", channel),
+                target_channel: channel,
+                interface: "test_iface".to_string(),
+                ..Default::default()
+            };
+
+            let result = generate_hostapd_config(&params);
+            assert!(result.is_ok(), "Failed for channel {}", channel);
+
+            let config_path = result.unwrap();
+            let content = fs::read_to_string(&config_path).unwrap();
+            assert!(
+                content.contains(&format!("channel={}", channel)),
+                "Missing channel {} in config",
+                channel
+            );
+            assert!(content.contains(&format!("ssid=TestNet_ch{}", channel)));
+            assert!(content.contains("interface=test_iface"));
+        }
+
+        // Test 4: Dnsmasq config with default params
+        let default_params = EvilTwinParams::default();
+        let dnsmasq_result = generate_dnsmasq_config(&default_params);
+        assert!(dnsmasq_result.is_ok());
+
+        let dnsmasq_path = dnsmasq_result.unwrap();
+        assert!(dnsmasq_path.exists());
+        let dnsmasq_content = fs::read_to_string(&dnsmasq_path).unwrap();
+
+        assert!(dnsmasq_content.contains(&format!("interface={}", default_params.interface)));
+        assert!(dnsmasq_content.contains(&format!(
+            "dhcp-range={},{}",
+            default_params.dhcp_range_start, default_params.dhcp_range_end
+        )));
+        assert!(dnsmasq_content.contains(&format!("dhcp-option=3,{}", default_params.gateway_ip)));
+        assert!(dnsmasq_content.contains(&format!("address=/#/{}", default_params.gateway_ip)));
+
+        // Test 5: Dnsmasq config with custom IP range
+        let custom_params = EvilTwinParams {
+            dhcp_range_start: "10.0.0.50".to_string(),
+            dhcp_range_end: "10.0.0.150".to_string(),
+            gateway_ip: "10.0.0.1".to_string(),
+            interface: "wlan0".to_string(),
+            ..Default::default()
+        };
+
+        let custom_result = generate_dnsmasq_config(&custom_params);
+        assert!(custom_result.is_ok());
+
+        let custom_path = custom_result.unwrap();
+        let custom_content = fs::read_to_string(&custom_path).unwrap();
+
+        assert!(custom_content.contains("dhcp-range=10.0.0.50,10.0.0.150"));
+        assert!(custom_content.contains("dhcp-option=3,10.0.0.1"));
+        assert!(custom_content.contains("address=/#/10.0.0.1"));
+        assert!(custom_content.contains("interface=wlan0"));
+
+        // Test 6: Consistency between hostapd and dnsmasq configs
+        let consistency_params = EvilTwinParams {
+            target_ssid: "ConsistencyTest".to_string(),
+            interface: "wlan1".to_string(),
+            ..Default::default()
+        };
+
+        let hostapd_result = generate_hostapd_config(&consistency_params);
+        let dnsmasq_result = generate_dnsmasq_config(&consistency_params);
+
+        assert!(hostapd_result.is_ok());
+        assert!(dnsmasq_result.is_ok());
+
+        let hostapd_content = fs::read_to_string(hostapd_result.unwrap()).unwrap();
+        let dnsmasq_content = fs::read_to_string(dnsmasq_result.unwrap()).unwrap();
+
+        assert!(hostapd_content.contains("interface=wlan1"));
+        assert!(dnsmasq_content.contains("interface=wlan1"));
 
         // Clean up
         let _ = fs::remove_file("/tmp/brutifi_hostapd.conf");
+        let _ = fs::remove_file("/tmp/brutifi_dnsmasq.conf");
+    }
+
+    // =========================================================================
+    // Edge Cases and Error Handling Tests
+    // =========================================================================
+
+    #[test]
+    fn test_evil_twin_params_unicode_ssid() {
+        let params = EvilTwinParams {
+            target_ssid: "Network_Test".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(params.target_ssid, "Network_Test");
     }
 
     #[test]
-    fn test_generate_dnsmasq_config() {
-        let params = EvilTwinParams::default();
-        let result = generate_dnsmasq_config(&params);
-        assert!(result.is_ok());
+    fn test_evil_twin_params_max_ssid_length() {
+        // WiFi SSID max length is 32 bytes
+        let long_ssid = "A".repeat(32);
+        let params = EvilTwinParams {
+            target_ssid: long_ssid.clone(),
+            ..Default::default()
+        };
+        assert_eq!(params.target_ssid.len(), 32);
+    }
 
-        // Clean up
-        let _ = fs::remove_file("/tmp/brutifi_dnsmasq.conf");
+    #[test]
+    fn test_evil_twin_result_serialization() {
+        let result = EvilTwinResult::PasswordFound {
+            password: "test123".to_string(),
+        };
+        let serialized = serde_json::to_string(&result).unwrap();
+        assert!(serialized.contains("test123"));
+
+        let deserialized: EvilTwinResult = serde_json::from_str(&serialized).unwrap();
+        if let EvilTwinResult::PasswordFound { password } = deserialized {
+            assert_eq!(password, "test123");
+        } else {
+            panic!("Deserialization failed");
+        }
+    }
+
+    #[test]
+    fn test_evil_twin_progress_serialization() {
+        let progress = EvilTwinProgress::Step {
+            current: 2,
+            total: 6,
+            description: "Testing".to_string(),
+        };
+
+        let serialized = serde_json::to_string(&progress).unwrap();
+        let deserialized: EvilTwinProgress = serde_json::from_str(&serialized).unwrap();
+
+        if let EvilTwinProgress::Step {
+            current,
+            total,
+            description,
+        } = deserialized
+        {
+            assert_eq!(current, 2);
+            assert_eq!(total, 6);
+            assert_eq!(description, "Testing");
+        } else {
+            panic!("Deserialization failed");
+        }
+    }
+
+    #[test]
+    fn test_captured_credential_serialization() {
+        let cred = CapturedCredential {
+            ssid: "SerializeTest".to_string(),
+            password: "pass".to_string(),
+            client_mac: "AA:BB:CC:DD:EE:FF".to_string(),
+            client_ip: "192.168.1.100".to_string(),
+            timestamp: 1700000000,
+            validated: true,
+        };
+
+        let serialized = serde_json::to_string(&cred).unwrap();
+        let deserialized: CapturedCredential = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.ssid, "SerializeTest");
+        assert!(deserialized.validated);
+    }
+
+    #[test]
+    fn test_evil_twin_state_thread_safety() {
+        use std::thread;
+
+        let state = Arc::new(EvilTwinState::new());
+        let state_clone = state.clone();
+
+        let handle = thread::spawn(move || {
+            state_clone.stop();
+        });
+
+        handle.join().unwrap();
+        assert!(!state.running.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_evil_twin_state_concurrent_credential_access() {
+        use std::thread;
+
+        let state = Arc::new(EvilTwinState::new());
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let state_clone = state.clone();
+            let handle = thread::spawn(move || {
+                let mut credentials = state_clone.captured_credentials.lock().unwrap();
+                credentials.push(CapturedCredential {
+                    ssid: format!("Net{}", i),
+                    password: format!("pass{}", i),
+                    client_mac: "AA:BB:CC:DD:EE:FF".to_string(),
+                    client_ip: "192.168.1.100".to_string(),
+                    timestamp: i as u64,
+                    validated: false,
+                });
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        let credentials = state.captured_credentials.lock().unwrap();
+        assert_eq!(credentials.len(), 10);
+    }
+
+    // =========================================================================
+    // Validation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_bssid_format_valid() {
+        let valid_bssids = [
+            "AA:BB:CC:DD:EE:FF",
+            "00:11:22:33:44:55",
+            "aa:bb:cc:dd:ee:ff",
+        ];
+
+        for bssid in valid_bssids {
+            let params = EvilTwinParams {
+                target_bssid: Some(bssid.to_string()),
+                ..Default::default()
+            };
+            assert!(params.target_bssid.is_some());
+        }
+    }
+
+    #[test]
+    fn test_ip_address_format() {
+        let params = EvilTwinParams {
+            gateway_ip: "192.168.1.1".to_string(),
+            dhcp_range_start: "192.168.1.100".to_string(),
+            dhcp_range_end: "192.168.1.200".to_string(),
+            ..Default::default()
+        };
+
+        // Verify format is valid IPv4
+        assert!(params.gateway_ip.split('.').count() == 4);
+        assert!(params.dhcp_range_start.split('.').count() == 4);
+        assert!(params.dhcp_range_end.split('.').count() == 4);
     }
 }

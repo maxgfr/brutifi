@@ -397,7 +397,7 @@ pub fn run_transition_downgrade_attack(
     let hash_file_str = hash_file.to_str().unwrap().to_string();
 
     let output = match Command::new("hcxpcapngtool")
-        .args(&["-o", &hash_file_str, capture_file.to_str().unwrap()])
+        .args(["-o", &hash_file_str, capture_file.to_str().unwrap()])
         .output()
     {
         Ok(output) => output,
@@ -484,25 +484,22 @@ pub fn run_sae_capture(
 pub fn check_dragonblood_vulnerabilities(
     _network_type: Wpa3NetworkType,
 ) -> Vec<DragonbloodVulnerability> {
-    let mut vulnerabilities = Vec::new();
-
-    // CVE-2019-13377: SAE timing attack
-    vulnerabilities.push(DragonbloodVulnerability {
-        cve: "CVE-2019-13377".to_string(),
-        description: "SAE handshake timing side-channel allows password partitioning attack"
-            .to_string(),
-        severity: "Medium".to_string(),
-    });
-
-    // CVE-2019-13456: Cache-based side channel
-    vulnerabilities.push(DragonbloodVulnerability {
-        cve: "CVE-2019-13456".to_string(),
-        description: "Cache-based side-channel attack on SAE password element derivation"
-            .to_string(),
-        severity: "Medium".to_string(),
-    });
-
-    vulnerabilities
+    vec![
+        // CVE-2019-13377: SAE timing attack
+        DragonbloodVulnerability {
+            cve: "CVE-2019-13377".to_string(),
+            description: "SAE handshake timing side-channel allows password partitioning attack"
+                .to_string(),
+            severity: "Medium".to_string(),
+        },
+        // CVE-2019-13456: Cache-based side channel
+        DragonbloodVulnerability {
+            cve: "CVE-2019-13456".to_string(),
+            description: "Cache-based side-channel attack on SAE password element derivation"
+                .to_string(),
+            severity: "Medium".to_string(),
+        },
+    ]
 }
 
 #[cfg(test)]

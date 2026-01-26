@@ -17,9 +17,9 @@ use crate::messages::Message;
 use crate::persistence::{
     PersistedCaptureState, PersistedCrackState, PersistedScanState, PersistedState,
 };
-use crate::screens::{CrackScreen, ScanCaptureScreen, Wpa3Screen, WpsScreen};
+use crate::screens::{CrackScreen, EvilTwinScreen, ScanCaptureScreen, Wpa3Screen, WpsScreen};
 use crate::theme::colors;
-use crate::workers::{self, CaptureState, CrackState, Wpa3State, WpsState};
+use crate::workers::{self, CaptureState, CrackState, EvilTwinState, Wpa3State, WpsState};
 
 /// Application screens
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,8 +27,6 @@ pub enum Screen {
     #[default]
     ScanCapture,
     Crack,
-    Wps,
-    Wpa3,
 }
 
 /// Main application state
@@ -38,6 +36,7 @@ pub struct BruteforceApp {
     pub(crate) crack_screen: CrackScreen,
     pub(crate) wps_screen: Option<WpsScreen>,
     pub(crate) wpa3_screen: Option<Wpa3Screen>,
+    pub(crate) evil_twin_screen: Option<EvilTwinScreen>,
     pub(crate) is_root: bool,
     pub(crate) capture_state: Option<Arc<CaptureState>>,
     pub(crate) capture_progress_rx:
@@ -50,6 +49,9 @@ pub struct BruteforceApp {
     pub(crate) wpa3_state: Option<Arc<Wpa3State>>,
     pub(crate) wpa3_progress_rx:
         Option<tokio::sync::mpsc::UnboundedReceiver<brutifi::Wpa3Progress>>,
+    pub(crate) evil_twin_state: Option<Arc<EvilTwinState>>,
+    pub(crate) evil_twin_progress_rx:
+        Option<tokio::sync::mpsc::UnboundedReceiver<brutifi::EvilTwinProgress>>,
 }
 
 impl BruteforceApp {
@@ -67,6 +69,7 @@ impl BruteforceApp {
             crack_screen: CrackScreen::default(),
             wps_screen: None,
             wpa3_screen: None,
+            evil_twin_screen: None,
             is_root,
             capture_state: None,
             capture_progress_rx: None,
@@ -76,6 +79,8 @@ impl BruteforceApp {
             wps_progress_rx: None,
             wpa3_state: None,
             wpa3_progress_rx: None,
+            evil_twin_state: None,
+            evil_twin_progress_rx: None,
         };
 
         if let Some(persisted) = load_persisted_state() {
@@ -130,11 +135,13 @@ impl BruteforceApp {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        // Poll for capture, crack, and WPS progress updates
+        // Poll for capture, crack, WPS, WPA3, and Evil Twin progress updates
         // Reduced from 100ms to 50ms for more responsive UI while maintaining performance
         if self.capture_progress_rx.is_some()
             || self.crack_progress_rx.is_some()
             || self.wps_progress_rx.is_some()
+            || self.wpa3_progress_rx.is_some()
+            || self.evil_twin_progress_rx.is_some()
         {
             time::every(std::time::Duration::from_millis(50)).map(|_| Message::Tick)
         } else {
@@ -147,7 +154,6 @@ impl BruteforceApp {
             // Navigation
             Message::GoToScanCapture => self.handle_go_to_scan_capture(),
             Message::GoToCrack => self.handle_go_to_crack(),
-            Message::GoToWps => self.handle_go_to_wps(),
 
             // Scan
             Message::StartScan => self.handle_start_scan(),
@@ -157,6 +163,7 @@ impl BruteforceApp {
             Message::SelectNetwork(idx) => self.handle_select_network(idx),
             Message::SelectChannel(channel) => self.handle_select_channel(channel),
             Message::InterfaceSelected(interface) => self.handle_interface_selected(interface),
+            Message::ToggleDualInterface(enabled) => self.handle_toggle_dual_interface(enabled),
 
             // Capture
             Message::BrowseCaptureFile => self.handle_browse_capture_file(),
@@ -197,7 +204,6 @@ impl BruteforceApp {
             Message::WpsProgress(progress) => self.handle_wps_progress(progress),
 
             // WPA3
-            Message::GoToWpa3 => self.handle_go_to_wpa3(),
             Message::Wpa3MethodChanged(method) => self.handle_wpa3_method_changed(method),
             Message::Wpa3BssidChanged(bssid) => self.handle_wpa3_bssid_changed(bssid),
             Message::Wpa3ChannelChanged(channel) => self.handle_wpa3_channel_changed(channel),
@@ -207,6 +213,22 @@ impl BruteforceApp {
             Message::StartWpa3Attack => self.handle_start_wpa3_attack(),
             Message::StopWpa3Attack => self.handle_stop_wpa3_attack(),
             Message::Wpa3Progress(progress) => self.handle_wpa3_progress(progress),
+
+            // Evil Twin
+            Message::EvilTwinTemplateChanged(template) => {
+                self.handle_evil_twin_template_changed(template)
+            }
+            Message::EvilTwinSsidChanged(ssid) => self.handle_evil_twin_ssid_changed(ssid),
+            Message::EvilTwinBssidChanged(bssid) => self.handle_evil_twin_bssid_changed(bssid),
+            Message::EvilTwinChannelChanged(channel) => {
+                self.handle_evil_twin_channel_changed(channel)
+            }
+            Message::EvilTwinInterfaceChanged(interface) => {
+                self.handle_evil_twin_interface_changed(interface)
+            }
+            Message::StartEvilTwinAttack => self.handle_start_evil_twin_attack(),
+            Message::StopEvilTwinAttack => self.handle_stop_evil_twin_attack(),
+            Message::EvilTwinProgress(progress) => self.handle_evil_twin_progress(progress),
 
             // General
             Message::ReturnToNormalMode => self.handle_return_to_normal_mode(),
@@ -245,16 +267,12 @@ impl BruteforceApp {
             None
         };
 
-        // Navigation header - 4 tabs
+        // Navigation header - 2 tabs
         let nav = container(
             row![
                 nav_button("1. Scan & Capture", Screen::ScanCapture, self.screen),
                 text("→").size(16).color(colors::TEXT_DIM),
                 nav_button("2. Crack", Screen::Crack, self.screen),
-                text("→").size(16).color(colors::TEXT_DIM),
-                nav_button("3. WPS", Screen::Wps, self.screen),
-                text("→").size(16).color(colors::TEXT_DIM),
-                nav_button("4. WPA3", Screen::Wpa3, self.screen),
             ]
             .spacing(15)
             .align_y(iced::Alignment::Center)
@@ -270,24 +288,6 @@ impl BruteforceApp {
         let content = match self.screen {
             Screen::ScanCapture => self.scan_capture_screen.view(self.is_root),
             Screen::Crack => self.crack_screen.view(self.is_root),
-            Screen::Wps => {
-                if let Some(ref screen) = self.wps_screen {
-                    screen.view(self.is_root)
-                } else {
-                    container(text("Loading WPS screen...").size(14).color(colors::TEXT))
-                        .padding(20)
-                        .into()
-                }
-            }
-            Screen::Wpa3 => {
-                if let Some(ref screen) = self.wpa3_screen {
-                    screen.view(self.is_root)
-                } else {
-                    container(text("Loading WPA3 screen...").size(14).color(colors::TEXT))
-                        .padding(20)
-                        .into()
-                }
-            }
         };
 
         let mut main_col = column![nav, horizontal_rule(1)];
@@ -471,8 +471,6 @@ fn nav_button(label: &str, target: Screen, current: Screen) -> Element<'_, Messa
     let msg = match target {
         Screen::ScanCapture => Message::GoToScanCapture,
         Screen::Crack => Message::GoToCrack,
-        Screen::Wps => Message::GoToWps,
-        Screen::Wpa3 => Message::GoToWpa3,
     };
 
     button(text(label).size(14).color(color))

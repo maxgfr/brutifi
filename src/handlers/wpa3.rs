@@ -181,29 +181,4 @@ impl BruteforceApp {
 
         Task::none()
     }
-
-    /// Handle navigation to WPA3 screen
-    pub fn handle_go_to_wpa3(&mut self) -> Task<Message> {
-        // Initialize WPA3 screen if not already done
-        if self.wpa3_screen.is_none() {
-            self.wpa3_screen = Some(crate::screens::Wpa3Screen::default());
-        }
-
-        // Stop any ongoing attacks
-        if let Some(ref mut wpa3_screen) = self.wpa3_screen {
-            if wpa3_screen.is_attacking {
-                if let Some(ref state) = self.wpa3_state {
-                    state.stop();
-                }
-                wpa3_screen.is_attacking = false;
-                self.wpa3_state = None;
-                self.wpa3_progress_rx = None;
-            }
-        }
-
-        // Update screen
-        self.screen = crate::app::Screen::Wpa3;
-
-        Task::none()
-    }
 }

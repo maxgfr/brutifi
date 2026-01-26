@@ -75,6 +75,13 @@ impl BruteforceApp {
             }
         }
 
+        // Poll for Evil Twin progress
+        if let Some(ref mut rx) = self.evil_twin_progress_rx {
+            while let Ok(progress) = rx.try_recv() {
+                messages.push(Message::EvilTwinProgress(progress));
+            }
+        }
+
         if !messages.is_empty() {
             return Task::batch(messages.into_iter().map(Task::done));
         }

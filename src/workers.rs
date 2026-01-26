@@ -111,6 +111,9 @@ impl Wpa3State {
     }
 }
 
+// Re-export EvilTwinState from brutifi core
+pub use brutifi::EvilTwinState;
+
 /// Wordlist crack worker data
 pub struct WordlistCrackParams {
     pub handshake_path: PathBuf,
@@ -645,6 +648,67 @@ pub async fn wpa3_attack_async(
             let error_msg = format!("WPA3 task failed: {}", e);
             let _ = progress_tx.send(brutifi::Wpa3Progress::Error(error_msg.clone()));
             brutifi::Wpa3Result::Error(error_msg)
+        }
+    }
+}
+
+/// Run Evil Twin attack in background with progress updates
+pub async fn evil_twin_attack_async(
+    params: brutifi::EvilTwinParams,
+    state: Arc<EvilTwinState>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<brutifi::EvilTwinProgress>,
+) -> brutifi::EvilTwinResult {
+    use brutifi::run_evil_twin_attack;
+
+    let _ = progress_tx.send(brutifi::EvilTwinProgress::Started);
+
+    let _ = progress_tx.send(brutifi::EvilTwinProgress::Log(format!(
+        "Starting Evil Twin attack on {} (channel {})",
+        params.target_ssid, params.target_channel
+    )));
+
+    // Run attack in blocking thread
+    let state_clone = state.clone();
+    let progress_tx_clone = progress_tx.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        run_evil_twin_attack(&params, state_clone, &progress_tx_clone)
+    })
+    .await;
+
+    match result {
+        Ok(evil_twin_result) => {
+            // Forward the result and send appropriate log messages
+            match &evil_twin_result {
+                brutifi::EvilTwinResult::Running => {
+                    let _ = progress_tx.send(brutifi::EvilTwinProgress::Log(
+                        "Attack is running...".to_string(),
+                    ));
+                }
+                brutifi::EvilTwinResult::PasswordFound { password } => {
+                    let _ = progress_tx.send(brutifi::EvilTwinProgress::Log(format!(
+                        "✅ Valid password found: {}",
+                        password
+                    )));
+                }
+                brutifi::EvilTwinResult::Stopped => {
+                    let _ = progress_tx.send(brutifi::EvilTwinProgress::Log(
+                        "Attack stopped by user".to_string(),
+                    ));
+                }
+                brutifi::EvilTwinResult::Error(e) => {
+                    let _ = progress_tx.send(brutifi::EvilTwinProgress::Log(format!(
+                        "Attack error: {}",
+                        e
+                    )));
+                }
+            }
+            evil_twin_result
+        }
+        Err(e) => {
+            let error_msg = format!("Evil Twin task failed: {}", e);
+            let _ = progress_tx.send(brutifi::EvilTwinProgress::Error(error_msg.clone()));
+            brutifi::EvilTwinResult::Error(error_msg)
         }
     }
 }
