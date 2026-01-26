@@ -246,6 +246,19 @@ impl ScanCaptureScreen {
                         "?"
                     };
 
+                    // Detect vulnerabilities based on security type
+                    let vulnerabilities: Vec<&str> = if network.security.contains("WPA3") {
+                        vec!["WPA3-SAE", "Dragonblood", "Downgrade"]
+                    } else if network.security.contains("WPA2") {
+                        vec!["PMKID", "Handshake", "WPS"]
+                    } else if network.security.contains("WPA") {
+                        vec!["PMKID", "Handshake"]
+                    } else if network.security.contains("None") {
+                        vec!["Open"]
+                    } else {
+                        vec![]
+                    };
+
                     let item_style = if is_selected {
                         theme::network_item_selected_style
                     } else {
@@ -264,8 +277,34 @@ impl ScanCaptureScreen {
                                     text(format!("Ch {} | {}", network.channel, signal_icon))
                                         .size(10)
                                         .color(colors::TEXT_DIM),
+                                    if !vulnerabilities.is_empty() {
+                                        row(vulnerabilities
+                                            .iter()
+                                            .map(|v| {
+                                                container(text(*v).size(8))
+                                                    .padding([2, 5])
+                                                    .style(|_: &Theme| container::Style {
+                                                        background: Some(iced::Background::Color(
+                                                            iced::Color::from_rgba(
+                                                                0.86, 0.21, 0.27, 0.2,
+                                                            ),
+                                                        )),
+                                                        border: iced::Border {
+                                                            color: colors::DANGER,
+                                                            width: 1.0,
+                                                            radius: 3.0.into(),
+                                                        },
+                                                        ..Default::default()
+                                                    })
+                                                    .into()
+                                            })
+                                            .collect::<Vec<Element<Message>>>())
+                                        .spacing(3)
+                                    } else {
+                                        row![].spacing(0)
+                                    },
                                 ]
-                                .spacing(2),
+                                .spacing(3),
                                 horizontal_space(),
                                 text(network.security.clone())
                                     .size(10)

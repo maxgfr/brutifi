@@ -6,9 +6,6 @@
 
 mod capture;
 mod crack;
-mod evil_twin;
 mod general;
 mod navigation;
 mod scan;
-mod wpa3;
-mod wps;

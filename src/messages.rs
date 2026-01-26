@@ -6,9 +6,7 @@
 
 use std::path::PathBuf;
 
-use crate::screens::{
-    CrackEngine, CrackMethod, EvilTwinPortalTemplate, Wpa3AttackMethod, WpsAttackMethod,
-};
+use crate::screens::{CrackEngine, CrackMethod};
 use crate::workers::{CaptureProgress, CrackProgress, ScanResult};
 
 /// Application messages
@@ -55,38 +53,6 @@ pub enum Message {
     StopCrack,
     CrackProgress(CrackProgress),
     CopyPassword,
-    #[allow(dead_code)]
-    ReturnToNormalMode,
-
-    // WPS Attack screen
-    WpsMethodChanged(WpsAttackMethod),
-    WpsBssidChanged(String),
-    WpsChannelChanged(String),
-    WpsInterfaceChanged(String),
-    #[allow(dead_code)]
-    WpsCustomPinChanged(String),
-    StartWpsAttack,
-    StopWpsAttack,
-    WpsProgress(brutifi::WpsProgress),
-
-    // WPA3 Attack screen
-    Wpa3MethodChanged(Wpa3AttackMethod),
-    Wpa3BssidChanged(String),
-    Wpa3ChannelChanged(String),
-    Wpa3InterfaceChanged(String),
-    StartWpa3Attack,
-    StopWpa3Attack,
-    Wpa3Progress(brutifi::Wpa3Progress),
-
-    // Evil Twin Attack screen
-    EvilTwinTemplateChanged(EvilTwinPortalTemplate),
-    EvilTwinSsidChanged(String),
-    EvilTwinBssidChanged(String),
-    EvilTwinChannelChanged(String),
-    EvilTwinInterfaceChanged(String),
-    StartEvilTwinAttack,
-    StopEvilTwinAttack,
-    EvilTwinProgress(brutifi::EvilTwinProgress),
 
     // General
     Tick,

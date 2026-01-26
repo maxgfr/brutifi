@@ -17,9 +17,9 @@ use crate::messages::Message;
 use crate::persistence::{
     PersistedCaptureState, PersistedCrackState, PersistedScanState, PersistedState,
 };
-use crate::screens::{CrackScreen, EvilTwinScreen, ScanCaptureScreen, Wpa3Screen, WpsScreen};
+use crate::screens::{CrackScreen, ScanCaptureScreen};
 use crate::theme::colors;
-use crate::workers::{self, CaptureState, CrackState, EvilTwinState, Wpa3State, WpsState};
+use crate::workers::{self, CaptureState, CrackState};
 
 /// Application screens
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -34,9 +34,6 @@ pub struct BruteforceApp {
     pub(crate) screen: Screen,
     pub(crate) scan_capture_screen: ScanCaptureScreen,
     pub(crate) crack_screen: CrackScreen,
-    pub(crate) wps_screen: Option<WpsScreen>,
-    pub(crate) wpa3_screen: Option<Wpa3Screen>,
-    pub(crate) evil_twin_screen: Option<EvilTwinScreen>,
     pub(crate) is_root: bool,
     pub(crate) capture_state: Option<Arc<CaptureState>>,
     pub(crate) capture_progress_rx:
@@ -44,14 +41,6 @@ pub struct BruteforceApp {
     pub(crate) crack_state: Option<Arc<CrackState>>,
     pub(crate) crack_progress_rx:
         Option<tokio::sync::mpsc::UnboundedReceiver<workers::CrackProgress>>,
-    pub(crate) wps_state: Option<Arc<WpsState>>,
-    pub(crate) wps_progress_rx: Option<tokio::sync::mpsc::UnboundedReceiver<brutifi::WpsProgress>>,
-    pub(crate) wpa3_state: Option<Arc<Wpa3State>>,
-    pub(crate) wpa3_progress_rx:
-        Option<tokio::sync::mpsc::UnboundedReceiver<brutifi::Wpa3Progress>>,
-    pub(crate) evil_twin_state: Option<Arc<EvilTwinState>>,
-    pub(crate) evil_twin_progress_rx:
-        Option<tokio::sync::mpsc::UnboundedReceiver<brutifi::EvilTwinProgress>>,
 }
 
 impl BruteforceApp {
@@ -67,20 +56,11 @@ impl BruteforceApp {
                 ..ScanCaptureScreen::default()
             },
             crack_screen: CrackScreen::default(),
-            wps_screen: None,
-            wpa3_screen: None,
-            evil_twin_screen: None,
             is_root,
             capture_state: None,
             capture_progress_rx: None,
             crack_state: None,
             crack_progress_rx: None,
-            wps_state: None,
-            wps_progress_rx: None,
-            wpa3_state: None,
-            wpa3_progress_rx: None,
-            evil_twin_state: None,
-            evil_twin_progress_rx: None,
         };
 
         if let Some(persisted) = load_persisted_state() {
@@ -135,14 +115,9 @@ impl BruteforceApp {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        // Poll for capture, crack, WPS, WPA3, and Evil Twin progress updates
+        // Poll for capture and crack progress updates
         // Reduced from 100ms to 50ms for more responsive UI while maintaining performance
-        if self.capture_progress_rx.is_some()
-            || self.crack_progress_rx.is_some()
-            || self.wps_progress_rx.is_some()
-            || self.wpa3_progress_rx.is_some()
-            || self.evil_twin_progress_rx.is_some()
-        {
+        if self.capture_progress_rx.is_some() || self.crack_progress_rx.is_some() {
             time::every(std::time::Duration::from_millis(50)).map(|_| Message::Tick)
         } else {
             Subscription::none()
@@ -193,45 +168,7 @@ impl BruteforceApp {
             Message::CrackProgress(progress) => self.handle_crack_progress(progress),
             Message::CopyPassword => self.handle_copy_password(),
 
-            // WPS
-            Message::WpsMethodChanged(method) => self.handle_wps_method_changed(method),
-            Message::WpsBssidChanged(bssid) => self.handle_wps_bssid_changed(bssid),
-            Message::WpsChannelChanged(channel) => self.handle_wps_channel_changed(channel),
-            Message::WpsInterfaceChanged(interface) => self.handle_wps_interface_changed(interface),
-            Message::WpsCustomPinChanged(pin) => self.handle_wps_custom_pin_changed(pin),
-            Message::StartWpsAttack => self.handle_start_wps_attack(),
-            Message::StopWpsAttack => self.handle_stop_wps_attack(),
-            Message::WpsProgress(progress) => self.handle_wps_progress(progress),
-
-            // WPA3
-            Message::Wpa3MethodChanged(method) => self.handle_wpa3_method_changed(method),
-            Message::Wpa3BssidChanged(bssid) => self.handle_wpa3_bssid_changed(bssid),
-            Message::Wpa3ChannelChanged(channel) => self.handle_wpa3_channel_changed(channel),
-            Message::Wpa3InterfaceChanged(interface) => {
-                self.handle_wpa3_interface_changed(interface)
-            }
-            Message::StartWpa3Attack => self.handle_start_wpa3_attack(),
-            Message::StopWpa3Attack => self.handle_stop_wpa3_attack(),
-            Message::Wpa3Progress(progress) => self.handle_wpa3_progress(progress),
-
-            // Evil Twin
-            Message::EvilTwinTemplateChanged(template) => {
-                self.handle_evil_twin_template_changed(template)
-            }
-            Message::EvilTwinSsidChanged(ssid) => self.handle_evil_twin_ssid_changed(ssid),
-            Message::EvilTwinBssidChanged(bssid) => self.handle_evil_twin_bssid_changed(bssid),
-            Message::EvilTwinChannelChanged(channel) => {
-                self.handle_evil_twin_channel_changed(channel)
-            }
-            Message::EvilTwinInterfaceChanged(interface) => {
-                self.handle_evil_twin_interface_changed(interface)
-            }
-            Message::StartEvilTwinAttack => self.handle_start_evil_twin_attack(),
-            Message::StopEvilTwinAttack => self.handle_stop_evil_twin_attack(),
-            Message::EvilTwinProgress(progress) => self.handle_evil_twin_progress(progress),
-
             // General
-            Message::ReturnToNormalMode => self.handle_return_to_normal_mode(),
             Message::Tick => self.handle_tick(),
         }
     }
