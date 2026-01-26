@@ -56,12 +56,23 @@ Modern, cross-platform WiFi penetration testing tool with GPU acceleration and c
     - Smart rate limiting to avoid AP lockout
     - Automatic password recovery
 
-#### Coming Soon 🔜
-
 - **WPA3-SAE Support** - Modern WPA3 networks
-  - Transition mode downgrade (80-90% success rate)
-  - SAE handshake capture
-  - Dragonblood vulnerability detection
+  - **WPA3 Detection** - Automatic network type identification
+    - WPA3-Only (SAE) detection
+    - WPA3-Transition mode detection (vulnerable)
+    - PMF (Protected Management Frames) detection
+  - **Transition Mode Downgrade** - Force WPA3-Transition to WPA2 (80-90% success rate)
+    - Captures standard WPA2 handshake
+    - Compatible with existing cracking methods
+  - **SAE Handshake Capture** - For pure WPA3 networks
+    - Uses hcxdumptool v6.0+ for SAE capture
+    - Converts to hashcat mode 22000
+    - Offline cracking support
+  - **Dragonblood Detection** - Identifies known WPA3 vulnerabilities
+    - CVE-2019-13377: SAE timing side-channel
+    - CVE-2019-13456: Cache-based side-channel
+
+#### Coming Soon 🔜
 - **Evil Twin Attack** - Rogue AP with captive portal
   - Multiple portal templates (Generic, TP-Link, Netgear, Linksys)
   - Real-time credential validation
@@ -77,12 +88,16 @@ Modern, cross-platform WiFi penetration testing tool with GPU acceleration and c
 ### Installation
 
 #### Prerequisites
+
 ```bash
 # macOS (Homebrew)
 brew install hashcat hcxtools
 
-# For WPS attacks (coming soon)
+# For WPS attacks
 brew install reaver pixiewps
+
+# For WPA3 attacks
+brew install hcxdumptool hcxtools
 
 # For Evil Twin (coming soon)
 brew install hostapd dnsmasq
@@ -512,6 +527,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 - **[AirJack](https://github.com/rtulke/AirJack)** - Python-based WiFi testing tool
 - **[Pyrit](https://github.com/JPaulMora/Pyrit)** - Pre-computed tables for WPA-PSK
 - **[Cowpatty](https://github.com/joswr1ght/cowpatty)** - Early WPA-PSK cracking
+- https://github.com/kimocoder/wifite2
 
 ### Technology
 
