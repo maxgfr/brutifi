@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use crate::screens::{CrackEngine, CrackMethod, WpsAttackMethod};
+use crate::screens::{CrackEngine, CrackMethod, Wpa3AttackMethod, WpsAttackMethod};
 use crate::workers::{CaptureProgress, CrackProgress, ScanResult};
 
 /// Application messages
@@ -16,6 +16,7 @@ pub enum Message {
     GoToScanCapture,
     GoToCrack,
     GoToWps,
+    GoToWpa3,
 
     // Scan & Capture screen
     StartScan,
@@ -64,6 +65,15 @@ pub enum Message {
     StartWpsAttack,
     StopWpsAttack,
     WpsProgress(brutifi::WpsProgress),
+
+    // WPA3 Attack screen
+    Wpa3MethodChanged(Wpa3AttackMethod),
+    Wpa3BssidChanged(String),
+    Wpa3ChannelChanged(String),
+    Wpa3InterfaceChanged(String),
+    StartWpa3Attack,
+    StopWpa3Attack,
+    Wpa3Progress(brutifi::Wpa3Progress),
 
     // General
     Tick,

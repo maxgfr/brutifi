@@ -68,6 +68,13 @@ impl BruteforceApp {
             }
         }
 
+        // Poll for WPA3 progress
+        if let Some(ref mut rx) = self.wpa3_progress_rx {
+            while let Ok(progress) = rx.try_recv() {
+                messages.push(Message::Wpa3Progress(progress));
+            }
+        }
+
         if !messages.is_empty() {
             return Task::batch(messages.into_iter().map(Task::done));
         }

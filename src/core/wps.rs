@@ -10,7 +10,7 @@
  * - pixiewps: Offline WPS PIN calculator
  */
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -516,10 +516,8 @@ pub fn run_pin_bruteforce_attack(
                 }
             }
             Err(e) => {
-                let _ = progress_tx.send(WpsProgress::Log(format!(
-                    "Error trying PIN {}: {}",
-                    pin, e
-                )));
+                let _ =
+                    progress_tx.send(WpsProgress::Log(format!("Error trying PIN {}: {}", pin, e)));
                 // Continue to next PIN
                 continue;
             }
@@ -532,8 +530,7 @@ pub fn run_pin_bruteforce_attack(
     )));
 
     let _ = progress_tx.send(WpsProgress::Log(
-        "💡 Consider: 1) Try Pixie-Dust attack, 2) Router may have WPS lockout enabled"
-            .to_string(),
+        "💡 Consider: 1) Try Pixie-Dust attack, 2) Router may have WPS lockout enabled".to_string(),
     ));
 
     WpsResult::NotFound
@@ -703,7 +700,7 @@ enum PinResult {
 fn try_wps_pin(
     params: &WpsAttackParams,
     pin: &str,
-    progress_tx: &tokio::sync::mpsc::UnboundedSender<WpsProgress>,
+    _progress_tx: &tokio::sync::mpsc::UnboundedSender<WpsProgress>,
     stop_flag: &Arc<AtomicBool>,
 ) -> Result<PinResult> {
     let channel_str = params.channel.to_string();
@@ -717,9 +714,10 @@ fn try_wps_pin(
         "-p",
         pin,
         "-vv",
-        "-N",  // Don't send NACK
-        "-L",  // Ignore locked state
-        "-g", "1", // Max 1 attempt per PIN
+        "-N", // Don't send NACK
+        "-L", // Ignore locked state
+        "-g",
+        "1", // Max 1 attempt per PIN
     ];
 
     let output = Command::new("reaver")

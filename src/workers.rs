@@ -94,6 +94,23 @@ impl WpsState {
     }
 }
 
+/// WPA3 attack state for controlling the attack process
+pub struct Wpa3State {
+    pub running: Arc<AtomicBool>,
+}
+
+impl Wpa3State {
+    pub fn new() -> Self {
+        Self {
+            running: Arc::new(AtomicBool::new(true)),
+        }
+    }
+
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Wordlist crack worker data
 pub struct WordlistCrackParams {
     pub handshake_path: PathBuf,
@@ -538,6 +555,96 @@ pub async fn wps_attack_async(
             let error_msg = format!("WPS task failed: {}", e);
             let _ = progress_tx.send(brutifi::WpsProgress::Error(error_msg.clone()));
             brutifi::WpsResult::Error(error_msg)
+        }
+    }
+}
+
+/// Run WPA3 attack in background with progress updates
+pub async fn wpa3_attack_async(
+    params: brutifi::Wpa3AttackParams,
+    state: Arc<Wpa3State>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<brutifi::Wpa3Progress>,
+) -> brutifi::Wpa3Result {
+    use brutifi::{run_sae_capture, run_transition_downgrade_attack, Wpa3AttackType};
+
+    let _ = progress_tx.send(brutifi::Wpa3Progress::Started);
+
+    // Log attack configuration
+    let attack_name = match params.attack_type {
+        Wpa3AttackType::TransitionDowngrade => "Transition Mode Downgrade",
+        Wpa3AttackType::SaeHandshake => "SAE Handshake Capture",
+        Wpa3AttackType::DragonbloodScan => "Dragonblood Vulnerability Scan",
+    };
+
+    let _ = progress_tx.send(brutifi::Wpa3Progress::Log(format!(
+        "Starting WPA3 {} attack on {}",
+        attack_name, params.bssid
+    )));
+
+    // Run attack in blocking thread
+    let running = state.running.clone();
+    let progress_tx_clone = progress_tx.clone();
+
+    let result = tokio::task::spawn_blocking(move || match params.attack_type {
+        Wpa3AttackType::TransitionDowngrade => {
+            run_transition_downgrade_attack(&params, &progress_tx_clone, &running)
+        }
+        Wpa3AttackType::SaeHandshake => run_sae_capture(&params, &progress_tx_clone, &running),
+        Wpa3AttackType::DragonbloodScan => {
+            // Dragonblood scan is instant, just return vulnerabilities
+            let _ = progress_tx_clone.send(brutifi::Wpa3Progress::Log(
+                "Scanning for Dragonblood vulnerabilities...".to_string(),
+            ));
+
+            // For now, just indicate that WPA3 networks are potentially vulnerable
+            // In a real implementation, we would analyze the network's responses
+            let _ = progress_tx_clone.send(brutifi::Wpa3Progress::Log(
+                "Note: All WPA3 implementations may be vulnerable to timing attacks".to_string(),
+            ));
+
+            brutifi::Wpa3Result::Error("Dragonblood scan not yet fully implemented".to_string())
+        }
+    })
+    .await;
+
+    match result {
+        Ok(wpa3_result) => {
+            // Forward the result and send appropriate log messages
+            match &wpa3_result {
+                brutifi::Wpa3Result::Captured {
+                    capture_file,
+                    hash_file,
+                } => {
+                    let _ = progress_tx.send(brutifi::Wpa3Progress::Log(format!(
+                        "✅ Capture file: {}",
+                        capture_file.display()
+                    )));
+                    let _ = progress_tx.send(brutifi::Wpa3Progress::Log(format!(
+                        "✅ Hash file: {}",
+                        hash_file.display()
+                    )));
+                }
+                brutifi::Wpa3Result::NotFound => {
+                    let _ = progress_tx.send(brutifi::Wpa3Progress::Log(
+                        "No handshakes captured".to_string(),
+                    ));
+                }
+                brutifi::Wpa3Result::Stopped => {
+                    let _ = progress_tx.send(brutifi::Wpa3Progress::Log(
+                        "Attack stopped by user".to_string(),
+                    ));
+                }
+                brutifi::Wpa3Result::Error(e) => {
+                    let _ = progress_tx
+                        .send(brutifi::Wpa3Progress::Log(format!("Attack error: {}", e)));
+                }
+            }
+            wpa3_result
+        }
+        Err(e) => {
+            let error_msg = format!("WPA3 task failed: {}", e);
+            let _ = progress_tx.send(brutifi::Wpa3Progress::Error(error_msg.clone()));
+            brutifi::Wpa3Result::Error(error_msg)
         }
     }
 }

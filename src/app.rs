@@ -17,9 +17,9 @@ use crate::messages::Message;
 use crate::persistence::{
     PersistedCaptureState, PersistedCrackState, PersistedScanState, PersistedState,
 };
-use crate::screens::{CrackScreen, ScanCaptureScreen, WpsScreen};
+use crate::screens::{CrackScreen, ScanCaptureScreen, Wpa3Screen, WpsScreen};
 use crate::theme::colors;
-use crate::workers::{self, CaptureState, CrackState, WpsState};
+use crate::workers::{self, CaptureState, CrackState, Wpa3State, WpsState};
 
 /// Application screens
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -28,6 +28,7 @@ pub enum Screen {
     ScanCapture,
     Crack,
     Wps,
+    Wpa3,
 }
 
 /// Main application state
@@ -36,6 +37,7 @@ pub struct BruteforceApp {
     pub(crate) scan_capture_screen: ScanCaptureScreen,
     pub(crate) crack_screen: CrackScreen,
     pub(crate) wps_screen: Option<WpsScreen>,
+    pub(crate) wpa3_screen: Option<Wpa3Screen>,
     pub(crate) is_root: bool,
     pub(crate) capture_state: Option<Arc<CaptureState>>,
     pub(crate) capture_progress_rx:
@@ -45,6 +47,9 @@ pub struct BruteforceApp {
         Option<tokio::sync::mpsc::UnboundedReceiver<workers::CrackProgress>>,
     pub(crate) wps_state: Option<Arc<WpsState>>,
     pub(crate) wps_progress_rx: Option<tokio::sync::mpsc::UnboundedReceiver<brutifi::WpsProgress>>,
+    pub(crate) wpa3_state: Option<Arc<Wpa3State>>,
+    pub(crate) wpa3_progress_rx:
+        Option<tokio::sync::mpsc::UnboundedReceiver<brutifi::Wpa3Progress>>,
 }
 
 impl BruteforceApp {
@@ -61,6 +66,7 @@ impl BruteforceApp {
             },
             crack_screen: CrackScreen::default(),
             wps_screen: None,
+            wpa3_screen: None,
             is_root,
             capture_state: None,
             capture_progress_rx: None,
@@ -68,6 +74,8 @@ impl BruteforceApp {
             crack_progress_rx: None,
             wps_state: None,
             wps_progress_rx: None,
+            wpa3_state: None,
+            wpa3_progress_rx: None,
         };
 
         if let Some(persisted) = load_persisted_state() {
@@ -188,6 +196,18 @@ impl BruteforceApp {
             Message::StopWpsAttack => self.handle_stop_wps_attack(),
             Message::WpsProgress(progress) => self.handle_wps_progress(progress),
 
+            // WPA3
+            Message::GoToWpa3 => self.handle_go_to_wpa3(),
+            Message::Wpa3MethodChanged(method) => self.handle_wpa3_method_changed(method),
+            Message::Wpa3BssidChanged(bssid) => self.handle_wpa3_bssid_changed(bssid),
+            Message::Wpa3ChannelChanged(channel) => self.handle_wpa3_channel_changed(channel),
+            Message::Wpa3InterfaceChanged(interface) => {
+                self.handle_wpa3_interface_changed(interface)
+            }
+            Message::StartWpa3Attack => self.handle_start_wpa3_attack(),
+            Message::StopWpa3Attack => self.handle_stop_wpa3_attack(),
+            Message::Wpa3Progress(progress) => self.handle_wpa3_progress(progress),
+
             // General
             Message::ReturnToNormalMode => self.handle_return_to_normal_mode(),
             Message::Tick => self.handle_tick(),
@@ -225,7 +245,7 @@ impl BruteforceApp {
             None
         };
 
-        // Navigation header - 3 steps
+        // Navigation header - 4 tabs
         let nav = container(
             row![
                 nav_button("1. Scan & Capture", Screen::ScanCapture, self.screen),
@@ -233,6 +253,8 @@ impl BruteforceApp {
                 nav_button("2. Crack", Screen::Crack, self.screen),
                 text("→").size(16).color(colors::TEXT_DIM),
                 nav_button("3. WPS", Screen::Wps, self.screen),
+                text("→").size(16).color(colors::TEXT_DIM),
+                nav_button("4. WPA3", Screen::Wpa3, self.screen),
             ]
             .spacing(15)
             .align_y(iced::Alignment::Center)
@@ -253,6 +275,15 @@ impl BruteforceApp {
                     screen.view(self.is_root)
                 } else {
                     container(text("Loading WPS screen...").size(14).color(colors::TEXT))
+                        .padding(20)
+                        .into()
+                }
+            }
+            Screen::Wpa3 => {
+                if let Some(ref screen) = self.wpa3_screen {
+                    screen.view(self.is_root)
+                } else {
+                    container(text("Loading WPA3 screen...").size(14).color(colors::TEXT))
                         .padding(20)
                         .into()
                 }
@@ -441,6 +472,7 @@ fn nav_button(label: &str, target: Screen, current: Screen) -> Element<'_, Messa
         Screen::ScanCapture => Message::GoToScanCapture,
         Screen::Crack => Message::GoToCrack,
         Screen::Wps => Message::GoToWps,
+        Screen::Wpa3 => Message::GoToWpa3,
     };
 
     button(text(label).size(14).color(color))

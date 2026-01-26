@@ -6,6 +6,7 @@ pub mod hashcat;
 pub mod network;
 pub mod password_gen;
 pub mod security;
+pub mod wpa3;
 pub mod wps;
 
 // Re-exports
@@ -19,6 +20,12 @@ pub use hashcat::{
 pub use network::{
     capture_traffic, compact_duplicate_networks, disconnect_wifi, scan_networks,
     wifi_connected_ssid, CaptureOptions, WifiNetwork,
+};
+pub use wpa3::{
+    check_dragonblood_vulnerabilities, check_hcxdumptool_installed, check_hcxpcapngtool_installed,
+    detect_wpa3_type, get_hcxdumptool_version, get_hcxpcapngtool_version, run_sae_capture,
+    run_transition_downgrade_attack, DragonbloodVulnerability, Wpa3AttackParams, Wpa3AttackType,
+    Wpa3NetworkType, Wpa3Progress, Wpa3Result,
 };
 pub use wps::{
     calculate_wps_checksum, check_pixiewps_installed, check_reaver_installed,
