@@ -61,6 +61,13 @@ impl BruteforceApp {
             }
         }
 
+        // Poll for WPS progress
+        if let Some(ref mut rx) = self.wps_progress_rx {
+            while let Ok(progress) = rx.try_recv() {
+                messages.push(Message::WpsProgress(progress));
+            }
+        }
+
         if !messages.is_empty() {
             return Task::batch(messages.into_iter().map(Task::done));
         }

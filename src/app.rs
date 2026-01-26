@@ -17,9 +17,9 @@ use crate::messages::Message;
 use crate::persistence::{
     PersistedCaptureState, PersistedCrackState, PersistedScanState, PersistedState,
 };
-use crate::screens::{CrackScreen, ScanCaptureScreen};
+use crate::screens::{CrackScreen, ScanCaptureScreen, WpsScreen};
 use crate::theme::colors;
-use crate::workers::{self, CaptureState, CrackState};
+use crate::workers::{self, CaptureState, CrackState, WpsState};
 
 /// Application screens
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,6 +27,7 @@ pub enum Screen {
     #[default]
     ScanCapture,
     Crack,
+    Wps,
 }
 
 /// Main application state
@@ -34,6 +35,7 @@ pub struct BruteforceApp {
     pub(crate) screen: Screen,
     pub(crate) scan_capture_screen: ScanCaptureScreen,
     pub(crate) crack_screen: CrackScreen,
+    pub(crate) wps_screen: Option<WpsScreen>,
     pub(crate) is_root: bool,
     pub(crate) capture_state: Option<Arc<CaptureState>>,
     pub(crate) capture_progress_rx:
@@ -41,6 +43,8 @@ pub struct BruteforceApp {
     pub(crate) crack_state: Option<Arc<CrackState>>,
     pub(crate) crack_progress_rx:
         Option<tokio::sync::mpsc::UnboundedReceiver<workers::CrackProgress>>,
+    pub(crate) wps_state: Option<Arc<WpsState>>,
+    pub(crate) wps_progress_rx: Option<tokio::sync::mpsc::UnboundedReceiver<brutifi::WpsProgress>>,
 }
 
 impl BruteforceApp {
@@ -56,11 +60,14 @@ impl BruteforceApp {
                 ..ScanCaptureScreen::default()
             },
             crack_screen: CrackScreen::default(),
+            wps_screen: None,
             is_root,
             capture_state: None,
             capture_progress_rx: None,
             crack_state: None,
             crack_progress_rx: None,
+            wps_state: None,
+            wps_progress_rx: None,
         };
 
         if let Some(persisted) = load_persisted_state() {
@@ -115,9 +122,12 @@ impl BruteforceApp {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        // Poll for capture and crack progress updates
+        // Poll for capture, crack, and WPS progress updates
         // Reduced from 100ms to 50ms for more responsive UI while maintaining performance
-        if self.capture_progress_rx.is_some() || self.crack_progress_rx.is_some() {
+        if self.capture_progress_rx.is_some()
+            || self.crack_progress_rx.is_some()
+            || self.wps_progress_rx.is_some()
+        {
             time::every(std::time::Duration::from_millis(50)).map(|_| Message::Tick)
         } else {
             Subscription::none()
@@ -129,6 +139,7 @@ impl BruteforceApp {
             // Navigation
             Message::GoToScanCapture => self.handle_go_to_scan_capture(),
             Message::GoToCrack => self.handle_go_to_crack(),
+            Message::GoToWps => self.handle_go_to_wps(),
 
             // Scan
             Message::StartScan => self.handle_start_scan(),
@@ -167,6 +178,16 @@ impl BruteforceApp {
             Message::CrackProgress(progress) => self.handle_crack_progress(progress),
             Message::CopyPassword => self.handle_copy_password(),
 
+            // WPS
+            Message::WpsMethodChanged(method) => self.handle_wps_method_changed(method),
+            Message::WpsBssidChanged(bssid) => self.handle_wps_bssid_changed(bssid),
+            Message::WpsChannelChanged(channel) => self.handle_wps_channel_changed(channel),
+            Message::WpsInterfaceChanged(interface) => self.handle_wps_interface_changed(interface),
+            Message::WpsCustomPinChanged(pin) => self.handle_wps_custom_pin_changed(pin),
+            Message::StartWpsAttack => self.handle_start_wps_attack(),
+            Message::StopWpsAttack => self.handle_stop_wps_attack(),
+            Message::WpsProgress(progress) => self.handle_wps_progress(progress),
+
             // General
             Message::ReturnToNormalMode => self.handle_return_to_normal_mode(),
             Message::Tick => self.handle_tick(),
@@ -204,12 +225,14 @@ impl BruteforceApp {
             None
         };
 
-        // Navigation header - simplified to 2 steps
+        // Navigation header - 3 steps
         let nav = container(
             row![
                 nav_button("1. Scan & Capture", Screen::ScanCapture, self.screen),
                 text("→").size(16).color(colors::TEXT_DIM),
                 nav_button("2. Crack", Screen::Crack, self.screen),
+                text("→").size(16).color(colors::TEXT_DIM),
+                nav_button("3. WPS", Screen::Wps, self.screen),
             ]
             .spacing(15)
             .align_y(iced::Alignment::Center)
@@ -225,6 +248,15 @@ impl BruteforceApp {
         let content = match self.screen {
             Screen::ScanCapture => self.scan_capture_screen.view(self.is_root),
             Screen::Crack => self.crack_screen.view(self.is_root),
+            Screen::Wps => {
+                if let Some(ref screen) = self.wps_screen {
+                    screen.view(self.is_root)
+                } else {
+                    container(text("Loading WPS screen...").size(14).color(colors::TEXT))
+                        .padding(20)
+                        .into()
+                }
+            }
         };
 
         let mut main_col = column![nav, horizontal_rule(1)];
@@ -408,6 +440,7 @@ fn nav_button(label: &str, target: Screen, current: Screen) -> Element<'_, Messa
     let msg = match target {
         Screen::ScanCapture => Message::GoToScanCapture,
         Screen::Crack => Message::GoToCrack,
+        Screen::Wps => Message::GoToWps,
     };
 
     button(text(label).size(14).color(color))

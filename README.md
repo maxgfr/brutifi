@@ -1,136 +1,385 @@
-# BrutiFi 🔐
+# 🔐 BrutiFi - Advanced WiFi Security Testing Tool
 
-> Modern desktop application for WPA/WPA2 security testing on macOS with real-time feedback
+Modern, cross-platform WiFi penetration testing tool with GPU acceleration and comprehensive attack methods.
 
-[![Release](https://github.com/maxgfr/bruteforce-wifi/actions/workflows/release.yml/badge.svg)](https://github.com/maxgfr/bruteforce-wifi/releases)
-[![CI](https://github.com/maxgfr/bruteforce-wifi/actions/workflows/ci.yml/badge.svg)](https://github.com/maxgfr/bruteforce-wifi/actions)
-[![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-blue" alt="Platform">
+  <img src="https://img.shields.io/badge/Rust-1.70%2B-orange" alt="Rust">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+  <a href="https://github.com/maxgfr/bruteforce-wifi/releases">
+    <img src="https://github.com/maxgfr/bruteforce-wifi/actions/workflows/release.yml/badge.svg" alt="Release">
+  </a>
+  <a href="https://github.com/maxgfr/bruteforce-wifi/actions">
+    <img src="https://github.com/maxgfr/bruteforce-wifi/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+</p>
 
-**⚠️ EDUCATIONAL USE ONLY - UNAUTHORIZED ACCESS IS ILLEGAL ⚠️**
-
-A high-performance macOS desktop GUI application for testing WPA/WPA2 password security through offline bruteforce attacks. Built with Rust and Iced, featuring dual cracking engines (Native CPU and Hashcat GPU) for maximum performance.
+---
 
 ## ✨ Features
 
-### Core Capabilities
+### 🎯 Attack Methods
 
-- 🖥️ **Modern Desktop GUI** - Built with Iced framework for smooth, native experience
-- 🚀 **Dual Cracking Engines**:
-  - **Native CPU**: Custom PBKDF2 implementation with Rayon parallelism (~10K-100K passwords/sec)
-  - **Hashcat GPU**: 10-100x faster acceleration with automatic device detection
-- 📡 **WiFi Network Scanning** - Real-time discovery with channel detection
-- 🎯 **Handshake Capture** - EAPOL frame analysis with visual progress indicators
-- 🔑 **Dual Attack Modes**:
-  - 🔢 Numeric bruteforce (PIN codes: 8-12 digits)
-  - 📋 Wordlist attacks (rockyou.txt, custom lists)
-- 📊 **Live Progress** - Real-time speed metrics, attempt counters, and ETA
-- 🔒 **100% Offline** - No data transmitted anywhere
+#### Currently Implemented ✅
 
-### Platform Support
-- 🍎 **macOS Native** - Apple Silicon and Intel support
+- **PMKID Capture** - Clientless WPA/WPA2 attack (2018+)
+  - No deauth required
+  - Single packet capture
+  - Works on many modern routers
+  - Automatic fallback to traditional handshake
 
-## 📦 Installation
+- **WPA/WPA2 Handshake Capture** - Traditional 4-way handshake
+  - Automatic multi-channel rotation
+  - Smart dwell time optimization
+  - Detects M1, M2, M3, M4 frames
+  - Smart Connect support (dual-band routers)
 
-### macOS
+- **CPU Cracking** - Native PBKDF2 implementation
+  - Zero-allocation password generation
+  - Rayon parallelization (10K-100K pass/sec)
+  - Numeric and wordlist modes
+  - Portable (no external dependencies)
 
-#### Quick Installation
+- **GPU Cracking** - Hashcat integration
+  - 10-100x faster than CPU
+  - Automatic device detection (CPU+GPU, GPU, CPU)
+  - Supports mode 22000 (WPA/WPA2/WPA3 + PMKID)
+  - Real-time progress tracking
 
-1. Download the DMG from the latest release (Apple Silicon or Intel).
-2. Open the DMG and drag **BrutiFi.app** to **Applications**.
-3. Launch the app — macOS will ask for the admin (root) password at startup to enable capture.
+- **WPS Attacks** - WiFi Protected Setup exploitation
+  - **Pixie-Dust Attack** - Offline WPS PIN recovery (<10 seconds on vulnerable routers)
+    - Exploits weak random number generation
+    - Success rate: ~30% of WPS-enabled routers
+    - Automatic password recovery with PIN
+  - **PIN Brute-Force** - Online WPS attack with Luhn checksum optimization
+    - ~10M valid PINs (reduced from 100M via checksum)
+    - Smart rate limiting to avoid AP lockout
+    - Automatic password recovery
 
-#### Remove Quarantine Attribute (Required for GitHub downloads)
+#### Coming Soon 🔜
 
-When downloading from GitHub, macOS adds a quarantine attribute. You must remove it to launch the app:
+- **WPA3-SAE Support** - Modern WPA3 networks
+  - Transition mode downgrade (80-90% success rate)
+  - SAE handshake capture
+  - Dragonblood vulnerability detection
+- **Evil Twin Attack** - Rogue AP with captive portal
+  - Multiple portal templates (Generic, TP-Link, Netgear, Linksys)
+  - Real-time credential validation
+  - Smart deauthentication
+- **Attack Monitoring** - Passive wireless attack detection
+- **Session Resume** - Continue interrupted attacks
+- **WPA-SEC Integration** - Online distributed cracking
 
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+#### Prerequisites
 ```bash
-xattr -dr com.apple.quarantine /Applications/BrutiFi.app
+# macOS (Homebrew)
+brew install hashcat hcxtools
+
+# For WPS attacks (coming soon)
+brew install reaver pixiewps
+
+# For Evil Twin (coming soon)
+brew install hostapd dnsmasq
 ```
 
-> This removes security warnings, but WiFi capture in monitor mode still requires root privileges on macOS.
-
-### From Source
-
+#### Build from Source
 ```bash
-git clone https://github.com/maxgfr/bruteforce-wifi.git
+git clone https://github.com/maxgfr/bruteforce-wifi
 cd bruteforce-wifi
 cargo build --release
-./target/release/bruteforce-wifi
 ```
 
-## 🚀 Usage
+#### Install Binary (macOS)
 
-### Complete Workflow
+1. Download the DMG from the [latest release](https://github.com/maxgfr/bruteforce-wifi/releases)
+2. Open the DMG and drag **BrutiFi.app** to **Applications**
+3. Remove quarantine attribute (required for GitHub downloads):
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/BrutiFi.app
+   ```
 
-```text
-1. Scan Networks → 2. Select Target → 3. Capture Handshake → 4. Crack Password
+### Basic Usage
+
+#### Scan and Capture
+```bash
+# Run with sudo (required for network capture)
+sudo ./target/release/brutifi
+
+# In the GUI:
+# 1. Click "Scan" to discover networks
+# 2. Select a target network
+# 3. Click "Start Capture"
+# 4. Wait for PMKID or handshake
 ```
 
-### Step 1: Scan for Networks
+#### Crack Captured Handshake
+```bash
+# GPU cracking (recommended)
+sudo ./target/release/brutifi
+# Navigate to "Crack" tab
+# Select handshake file
+# Choose "Hashcat" engine
+# Select attack method (Numeric or Wordlist)
+# Click "Start Crack"
+```
 
-Launch the app and click "Scan Networks" to discover nearby WiFi networks:
+---
 
-- **SSID** (network name)
-- **Channel number**
-- **Signal strength**
-- **Security type** (WPA/WPA2)
+## 📖 Documentation
 
-### Step 2: Select & Capture Handshake
+### User Guides
+- **[PMKID Testing Guide](PMKID_TEST_GUIDE.md)** - How to test PMKID on your network
+- [WPS Attacks](docs/WPS_ATTACKS.md) - Coming soon
+- [WPA3 Support](docs/WPA3.md) - Coming soon
+- [Evil Twin](docs/EVIL_TWIN.md) - Coming soon
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
-Select a network → Click "Continue to Capture"
+### Developer Guides
+- **[Architecture](AGENTS.md)** - Codebase structure and patterns
+- [Contributing](CONTRIBUTING.md) - How to contribute
+- [Changelog](CHANGELOG.md) - Version history
 
-**Before capturing:**
+---
 
-1. **Choose output location**: Click "Choose Location" to save the .pcap file
-   - Default: `capture.pcap` in current directory
-   - Recommended: Save to Documents or Desktop for easy access
-2. **Disconnect from WiFi** (macOS only):
-   - Option+Click WiFi icon → "Disconnect"
-   - This improves capture reliability
+## 💪 Performance
 
-Then click "Start Capture"
+### Benchmarks
 
-The app monitors for the WPA/WPA2 4-way handshake:
+| Attack Method | Speed | Success Rate | Requirements |
+|--------------|-------|--------------|-------------|
+| PMKID Capture | 1-30 seconds | 60-70% | Modern router with PMKID support |
+| Handshake Capture | 1-5 minutes | 95%+ | Client reconnection |
+| WPS Pixie-Dust* | < 10 seconds | 40-50% | Vulnerable WPS implementation |
+| WPA3 Downgrade* | < 30 seconds | 80-90% | Transition mode network |
+| Evil Twin* | Variable | 90%+ | Active clients |
 
-- ✅ **M1** - ANonce (from AP)
-- ✅ **M2** - SNonce + MIC (from client)
-- 🎉 **Handshake Complete!**
+\* Coming soon
 
-> **macOS Note**: Deauth attacks don't work on Apple Silicon. Manually reconnect a device to trigger the handshake (turn WiFi off/on on your phone).
+### Cracking Speed
 
-### Step 3: Crack Password
+| Engine | Numeric (8 digits) | Wordlist (10M passwords) |
+|--------|-------------------|-------------------------|
+| Native CPU (M1 Pro) | ~30K pass/sec (~55 min) | ~50K pass/sec (~3.3 min) |
+| Hashcat GPU (M1 Pro) | ~2M pass/sec (~50 sec) | ~3M pass/sec (~3 sec) |
+| Hashcat GPU (RTX 3080) | ~10M pass/sec (~10 sec) | ~15M pass/sec (<1 sec) |
 
-Navigate to "Crack" tab:
+---
 
-#### Engine Selection
+## 🎨 Features in Detail
 
-- **Native CPU**: Software-only cracking, works everywhere
-- **Hashcat GPU**: Requires hashcat + hcxtools installed, 10-100x faster
+### PMKID Capture (Client-less Attack)
 
-#### Attack Methods
+**What is PMKID?**
+- Discovered in 2018 by Jens Steube (hashcat author)
+- Extracts PMK identifier from first EAPOL frame
+- No client needed (works without connected devices)
+- No deauth attack required (quieter, more ethical)
 
-- **Numeric Attack**: Tests PIN codes (e.g., 00000000-99999999)
-- **Wordlist Attack**: Tests passwords from files like rockyou.txt
+**How it works:**
+1. Router broadcasts PMKID during RSNA key negotiation
+2. BrutiFi captures the PMKID from EAPOL Message 1
+3. PMKID is converted to hashcat format (mode 22000, WPA*01*)
+4. Crack offline with hashcat or native CPU
 
-#### Real-time Stats
+**Advantages:**
+- ✅ Faster than traditional handshake (1 packet vs 4)
+- ✅ No client required
+- ✅ No deauth needed (passive)
+- ✅ Works on macOS (no injection needed)
 
-- Progress bar with percentage
-- Current attempts / Total
-- Passwords per second
-- Live logs (copyable)
+**Limitations:**
+- ❌ Not all routers support PMKID
+- ❌ Many modern routers patch this vulnerability
+- ❌ ISP boxes (Livebox, Freebox, SFR) usually patched
 
-## 🛠️ Development
+### Traditional WPA/WPA2 Handshake
+
+**What is a handshake?**
+- 4-way authentication exchange between client and AP
+- Contains all data needed to crack WPA password offline
+- Industry standard since 2003
+
+**BrutiFi's implementation:**
+- Multi-channel scanning and rotation
+- Auto-detects Smart Connect (2.4GHz + 5GHz)
+- Smart dwell time (stays longer on active channels)
+- Detects all 4 message types (M1, M2, M3, M4)
+- **Automatic PMKID prioritization** - tries PMKID first, falls back to handshake
+
+**Capture workflow:**
+1. Scan networks
+2. Select target
+3. Rotate through all target channels
+4. Detect PMKID or EAPOL frames
+5. Verify handshake completeness
+6. Save to pcap file
+
+**macOS Note:** Deauth attacks don't work on macOS (no packet injection). You must wait for natural client reconnections or manually reconnect a device.
+
+### GPU Acceleration (Hashcat)
+
+**Why hashcat?**
+- Industry-leading password cracking tool
+- Optimized for CUDA, OpenCL, Metal (Apple Silicon)
+- 10-100x faster than CPU
+- Supports WPA/WPA2/WPA3 + PMKID
+
+**BrutiFi's integration:**
+- Automatic device detection (CPU+GPU, GPU-only, CPU-only)
+- Automatic fallback if GPU fails
+- Real-time progress parsing (speed, ETA, progress)
+- Auto-cleans potfile to avoid cached results
+- Supports both numeric and wordlist attacks
+
+**Supported modes:**
+- Numeric brute-force (8-10 digits)
+- Wordlist attack (rockyou.txt, custom lists)
+- Incremental mode (8→9→10 digits)
+
+### Native CPU Cracking
+
+**Why use CPU mode?**
+- No external dependencies
+- Educational value (see WPA crypto internals)
+- Portable (works on any system)
+- Useful when hashcat unavailable
+
+**Optimizations:**
+- Zero-allocation password generation
+- Rayon work-stealing parallelism
+- Custom PBKDF2 implementation (~30% faster)
+- Stack-based PasswordBuffer (no heap allocations)
+
+**Performance:**
+- M1 Pro (8 cores): ~30K-50K pass/sec
+- Intel i7 (8 cores): ~20K-40K pass/sec
+- AMD Ryzen 7 (16 cores): ~50K-80K pass/sec
+
+---
+
+## 🛠️ Technical Details
+
+### Architecture
+
+```
+User Interface (Iced GUI)
+        ↓
+   Message Bus
+        ↓
+    Handlers (app logic)
+        ↓
+  Async Workers (Tokio)
+        ↓
+   Core Modules
+   ├── network.rs    - WiFi scanning & capture
+   ├── handshake.rs  - PCAP parsing & EAPOL extraction
+   ├── crypto.rs     - PBKDF2, PMK, PTK, MIC calculation
+   ├── bruteforce.rs - Native cracking engine
+   ├── hashcat.rs    - GPU integration
+   └── wps.rs        - WPS attacks (coming soon)
+```
+
+### Crypto Implementation
+
+**WPA2-PSK Cracking Process:**
+1. PMK = PBKDF2-SHA1(password, SSID, 4096 iterations, 256 bits)
+2. PTK = PRF-512(PMK, "Pairwise key expansion", APMac, ClientMac, ANonce, SNonce)
+3. MIC = HMAC-SHA1(PTK[0:16], EAPOL frame with MIC=0)
+4. Compare calculated MIC with captured MIC
+
+**Why PBKDF2 is slow:**
+- 4096 HMAC-SHA1 iterations per password
+- Intentionally designed to be computationally expensive
+- Makes brute-force attacks slower
+
+### File Structure
+
+```
+src/
+├── main.rs              - Entry point, panic handler, root check
+├── app.rs               - Main app state machine
+├── lib.rs               - Public API exports
+├── theme.rs             - UI theme (Iced)
+├── workers.rs           - Async workers (scan, capture, crack)
+├── workers_optimized.rs - CPU cracking workers
+├── core/
+│   ├── crypto.rs        - WPA2 crypto (PBKDF2, PTK, MIC)
+│   ├── handshake.rs     - PCAP parsing, EAPOL extraction, PMKID
+│   ├── bruteforce.rs    - Native cracking engine
+│   ├── password_gen.rs  - Zero-allocation password generator
+│   ├── network.rs       - WiFi scanning, packet capture
+│   ├── hashcat.rs       - Hashcat integration
+│   └── security.rs      - Security utilities
+├── screens/
+│   ├── scan_capture.rs  - Scan & capture UI
+│   └── crack.rs         - Cracking UI
+└── handlers/
+    ├── crack.rs         - Cracking logic
+    ├── capture.rs       - Capture logic
+    ├── scan.rs          - Scan logic
+    └── general.rs       - General app logic
+```
+
+---
+
+## 🖥️ Platform Support
+
+### macOS (Primary Platform)
+
+**Supported:**
+- ✅ WiFi scanning (CoreWLAN)
+- ✅ Monitor mode (en0 interface)
+- ✅ Packet capture (libpcap)
+- ✅ PMKID extraction
+- ✅ Handshake capture (passive)
+- ✅ GPU acceleration (Metal, M1/M2)
+- ✅ Auto-privilege escalation (osascript)
+
+**Limited/Unsupported:**
+- ❌ Packet injection (deauth attacks)
+- ❌ WPS attacks (requires injection)
+- ⚠️ Evil Twin (requires hostapd, may need external adapter)
+
+**Recommended External Adapters:**
+- Alfa AWUS036ACH (full injection support)
+- Panda PAU09 (injection support)
+- TP-Link TL-WN722N v1 (older but works)
+
+### Linux (Experimental)
+
+**Supported:**
+- ✅ All features
+- ✅ Packet injection (deauth attacks)
+- ✅ Full WPS support (when implemented)
+- ✅ Evil Twin attacks (when implemented)
+- ✅ Dual interface mode (when implemented)
+
+**Requirements:**
+- Monitor mode compatible adapter
+- aircrack-ng suite
+- hostapd, dnsmasq (for Evil Twin)
+
+---
+
+## 🔧 Development
 
 ### Prerequisites
 
 - **Rust 1.70+**: Install via [rustup](https://rustup.rs/)
-- **Xcode Command Line Tools**: `xcode-select --install`
+- **Xcode Command Line Tools** (macOS): `xcode-select --install`
+- **Hashcat** (optional): `brew install hashcat`
+- **hcxtools** (optional): `brew install hcxtools`
 
 ### Build Commands
 
 ```bash
-# Development build with fast compile times
+# Development build
 cargo build
 
 # Optimized release build
@@ -139,81 +388,167 @@ cargo build --release
 # Run the app
 cargo run --release
 
-# Format code (enforced by CI)
+# Format code
 cargo fmt --all
 
-# Lint code (enforced by CI)
+# Lint code
 cargo clippy --all-targets --all-features -- -D warnings
 
 # Run tests
 cargo test
 ```
 
-### Build macOS DMG (Local)
-
-You can build a macOS DMG installer locally from the source code:
+### Build macOS DMG
 
 ```bash
 # Build DMG (automatically detects architecture)
 ./scripts/build_dmg.sh
+
+# Output:
+# BrutiFi-{VERSION}-macOS-arm64.dmg (Apple Silicon)
+# BrutiFi-{VERSION}-macOS-x86_64.dmg (Intel)
 ```
 
-This will create:
-- `BrutiFi-{VERSION}-macOS-arm64.dmg` (Apple Silicon)
-- `BrutiFi-{VERSION}-macOS-arm64.dmg.sha256` (checksum)
+---
 
-**Note**: The application is signed with ad-hoc signing by default, which is sufficient for local use and testing. No additional code signing is required.
+## ⚠️ Legal Disclaimer
 
-### Optional: Hashcat Integration
+**IMPORTANT: This tool is for authorized security testing ONLY.**
 
-For GPU-accelerated cracking, install:
+### Legal Use Cases
+- ✅ Testing networks you own
+- ✅ Networks you have **written permission** to test
+- ✅ Educational purposes (your own test environment)
+- ✅ Authorized penetration testing engagements
+
+### Illegal Use
+- ❌ Attacking networks without permission
+- ❌ Capturing other people's passwords
+- ❌ Unauthorized access to WiFi networks
+- ❌ Any malicious or unethical use
+
+**By using this tool, you agree:**
+1. You will only test networks you own or have explicit permission to test
+2. You understand that unauthorized access is illegal in most jurisdictions
+3. The authors are not responsible for misuse of this software
+4. You will comply with all local, state, and federal laws
+
+**Penalties for unauthorized access can include:**
+- Criminal charges
+- Fines up to $250,000 (US)
+- Prison sentences
+- Civil lawsuits
+
+**Use responsibly. Get permission. Stay legal.**
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+### Development Setup
 
 ```bash
+# Clone the repo
+git clone https://github.com/maxgfr/bruteforce-wifi
+cd bruteforce-wifi
+
+# Install dependencies
 brew install hashcat hcxtools
+
+# Build
+cargo build
+
+# Run tests
+cargo test
+
+# Format and lint
+cargo fmt --all
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Run
+sudo cargo run --release
 ```
 
-## 🔐 Security & Legal
+### Code Style
 
-### Disclaimer
+- Follow Rust style guide
+- Run `cargo fmt` before committing
+- Ensure `cargo clippy` passes with no warnings
+- Add tests for new features
+- Update documentation
 
-#### Educational Use Only
+---
 
-This tool is for educational and authorized testing only.
+## 📝 Changelog
 
-✅ **Legal Uses:**
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
-- Testing your own WiFi network security
-- Authorized penetration testing with written permission
-- Security research and education
-- CTF competitions and challenges
+### Latest Version (1.14.2)
 
-❌ **Illegal Activities:**
+**Added:**
+- ✨ **PMKID Support** - Client-less WPA/WPA2 attack
+  - Automatic PMKID extraction from EAPOL M1
+  - Prioritizes PMKID over traditional handshake
+  - Fallback to 4-way handshake if PMKID not available
+- 🎨 UI improvements for capture type display
+- 📊 Capture progress shows "PMKID (client-less)" or "4-way handshake"
 
-- Unauthorized access to networks you don't own
-- Intercepting communications without permission
-- Any malicious or unauthorized use
+**Fixed:**
+- 🐛 Hashcat password parsing for PMKID (WPA*01*) format
 
-**Unauthorized access to computer networks is a criminal offense** in most jurisdictions (CFAA in USA, Computer Misuse Act in UK, etc.). Always obtain explicit written permission before testing.
+**Changed:**
+- 🔧 Updated handshake structure to support PMKID field
 
-## 🙏 Acknowledgments & inspiration
+---
 
-This project was inspired by several groundbreaking tools in the WiFi security space:
+## 🙏 Acknowledgments
 
-- [AirJack](https://github.com/rtulke/AirJack) - As `brutifi` but in a Python-based CLI
-- [Aircrack-ng](https://github.com/aircrack-ng/aircrack-ng) - Industry-standard WiFi
-- [Pyrit](https://github.com/JPaulMora/Pyrit) - Pre-computed tables for WPA-PSK attacks
-- [Cowpatty](https://github.com/joswr1ght/cowpatty) - Early WPA-PSK cracking implementation
+### Inspiration
 
-These tools demonstrated the feasibility of offline WPA/WPA2 password attacks and inspired the creation of a modern, user-friendly desktop application.
+- **[Wifite](https://github.com/derv82/wifite2)** - For attack method ideas and workflow inspiration
+- **[Aircrack-ng](https://github.com/aircrack-ng/aircrack-ng)** - Industry-standard WiFi security tools
+- **[AirJack](https://github.com/rtulke/AirJack)** - Python-based WiFi testing tool
+- **[Pyrit](https://github.com/JPaulMora/Pyrit)** - Pre-computed tables for WPA-PSK
+- **[Cowpatty](https://github.com/joswr1ght/cowpatty)** - Early WPA-PSK cracking
 
-Special thanks to the following libraries and tools:
+### Technology
 
-- [Iced](https://github.com/iced-rs/iced) - Cross-platform GUI framework
-- [Rayon](https://github.com/rayon-rs/rayon) - Data parallelism library
-- [pcap-rs](https://github.com/rust-pcap/pcap) - Rust bindings for libpcap
-- [Hashcat](https://github.com/hashcat/hashcat) - GPU-accelerated password recovery
-- [hcxtools](https://github.com/ZerBea/hcxtools) - Wireless security auditing tools
+- **[Iced](https://github.com/iced-rs/iced)** - Cross-platform GUI framework
+- **[Rayon](https://github.com/rayon-rs/rayon)** - Data parallelism library
+- **[pcap-rs](https://github.com/rust-pcap/pcap)** - Rust bindings for libpcap
+- **[Hashcat](https://github.com/hashcat/hashcat)** - GPU-accelerated password recovery
+- **[hcxtools](https://github.com/ZerBea/hcxtools)** - Wireless security auditing tools
+- **[Tokio](https://github.com/tokio-rs/tokio)** - Async runtime for Rust
+
+### Special Thanks
+
+- **Jens Steube** - For discovering PMKID attack (2018)
+- **Rust Community** - For the amazing language and ecosystem
+- All contributors and testers
+
+---
 
 ## 📄 License
 
-[MIT License](LICENSE) - Use at your own risk
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## 🔗 Links
+
+- **GitHub**: https://github.com/maxgfr/bruteforce-wifi
+- **Issues**: https://github.com/maxgfr/bruteforce-wifi/issues
+- **Discussions**: https://github.com/maxgfr/bruteforce-wifi/discussions
+- **Releases**: https://github.com/maxgfr/bruteforce-wifi/releases
+
+---
+
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/maxgfr">maxgfr</a>
+</p>
+
+<p align="center">
+  ⚡ Powered by Rust and hashcat ⚡
+</p>

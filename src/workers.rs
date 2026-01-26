@@ -77,6 +77,23 @@ impl CrackState {
     }
 }
 
+/// WPS attack state for controlling the attack process
+pub struct WpsState {
+    pub running: Arc<AtomicBool>,
+}
+
+impl WpsState {
+    pub fn new() -> Self {
+        Self {
+            running: Arc::new(AtomicBool::new(true)),
+        }
+    }
+
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Wordlist crack worker data
 pub struct WordlistCrackParams {
     pub handshake_path: PathBuf,
@@ -450,5 +467,77 @@ pub async fn crack_hashcat_async(
             CrackProgress::Error(e)
         }
         Err(e) => CrackProgress::Error(format!("Task failed: {}", e)),
+    }
+}
+
+/// Run WPS attack in background with progress updates
+pub async fn wps_attack_async(
+    params: brutifi::WpsAttackParams,
+    state: Arc<WpsState>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<brutifi::WpsProgress>,
+) -> brutifi::WpsResult {
+    use brutifi::{run_pin_bruteforce_attack, run_pixie_dust_attack, WpsAttackType};
+
+    let _ = progress_tx.send(brutifi::WpsProgress::Started);
+
+    // Log attack configuration
+    let attack_name = match params.attack_type {
+        WpsAttackType::PixieDust => "Pixie-Dust",
+        WpsAttackType::PinBruteForce => "PIN Brute-Force",
+    };
+
+    let _ = progress_tx.send(brutifi::WpsProgress::Log(format!(
+        "Starting WPS {} attack on {}",
+        attack_name, params.bssid
+    )));
+
+    // Run attack in blocking thread
+    let running = state.running.clone();
+    let progress_tx_clone = progress_tx.clone();
+
+    let result = tokio::task::spawn_blocking(move || match params.attack_type {
+        WpsAttackType::PixieDust => run_pixie_dust_attack(&params, &progress_tx_clone, &running),
+        WpsAttackType::PinBruteForce => {
+            run_pin_bruteforce_attack(&params, &progress_tx_clone, &running)
+        }
+    })
+    .await;
+
+    match result {
+        Ok(wps_result) => {
+            // Forward the result and send appropriate log messages
+            match &wps_result {
+                brutifi::WpsResult::Found { pin, password } => {
+                    let _ = progress_tx.send(brutifi::WpsProgress::Log(format!(
+                        "✅ WPS PIN found: {}",
+                        pin
+                    )));
+                    let _ = progress_tx.send(brutifi::WpsProgress::Log(format!(
+                        "✅ WiFi Password: {}",
+                        password
+                    )));
+                }
+                brutifi::WpsResult::NotFound => {
+                    let _ = progress_tx.send(brutifi::WpsProgress::Log(
+                        "Attack completed - no PIN found".to_string(),
+                    ));
+                }
+                brutifi::WpsResult::Stopped => {
+                    let _ = progress_tx.send(brutifi::WpsProgress::Log(
+                        "Attack stopped by user".to_string(),
+                    ));
+                }
+                brutifi::WpsResult::Error(e) => {
+                    let _ =
+                        progress_tx.send(brutifi::WpsProgress::Log(format!("Attack error: {}", e)));
+                }
+            }
+            wps_result
+        }
+        Err(e) => {
+            let error_msg = format!("WPS task failed: {}", e);
+            let _ = progress_tx.send(brutifi::WpsProgress::Error(error_msg.clone()));
+            brutifi::WpsResult::Error(error_msg)
+        }
     }
 }

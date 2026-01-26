@@ -6,6 +6,7 @@ pub mod hashcat;
 pub mod network;
 pub mod password_gen;
 pub mod security;
+pub mod wps;
 
 // Re-exports
 pub use bruteforce::OfflineBruteForcer;
@@ -18,4 +19,9 @@ pub use hashcat::{
 pub use network::{
     capture_traffic, compact_duplicate_networks, disconnect_wifi, scan_networks,
     wifi_connected_ssid, CaptureOptions, WifiNetwork,
+};
+pub use wps::{
+    calculate_wps_checksum, check_pixiewps_installed, check_reaver_installed,
+    generate_valid_wps_pins, get_pixiewps_version, get_reaver_version, run_pin_bruteforce_attack,
+    run_pixie_dust_attack, WpsAttackParams, WpsAttackType, WpsProgress, WpsResult,
 };

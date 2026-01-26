@@ -8,6 +8,8 @@
 
 pub mod crack;
 pub mod scan_capture;
+pub mod wps;
 
 pub use crack::{CrackEngine, CrackMethod, CrackScreen};
 pub use scan_capture::{HandshakeProgress, ScanCaptureScreen};
+pub use wps::{WpsAttackMethod, WpsScreen};

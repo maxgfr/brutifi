@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use crate::screens::{CrackEngine, CrackMethod};
+use crate::screens::{CrackEngine, CrackMethod, WpsAttackMethod};
 use crate::workers::{CaptureProgress, CrackProgress, ScanResult};
 
 /// Application messages
@@ -15,6 +15,7 @@ pub enum Message {
     // Navigation
     GoToScanCapture,
     GoToCrack,
+    GoToWps,
 
     // Scan & Capture screen
     StartScan,
@@ -53,6 +54,16 @@ pub enum Message {
     CopyPassword,
     #[allow(dead_code)]
     ReturnToNormalMode,
+
+    // WPS Attack screen
+    WpsMethodChanged(WpsAttackMethod),
+    WpsBssidChanged(String),
+    WpsChannelChanged(String),
+    WpsInterfaceChanged(String),
+    WpsCustomPinChanged(String),
+    StartWpsAttack,
+    StopWpsAttack,
+    WpsProgress(brutifi::WpsProgress),
 
     // General
     Tick,

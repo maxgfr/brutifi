@@ -9,3 +9,4 @@ mod crack;
 mod general;
 mod navigation;
 mod scan;
+mod wps;
