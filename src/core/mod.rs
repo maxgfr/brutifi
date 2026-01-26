@@ -1,5 +1,6 @@
 // Core library modules
 pub mod bruteforce;
+pub mod captive_portal;
 pub mod crypto;
 pub mod evil_twin;
 pub mod handshake;

