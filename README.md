@@ -1,6 +1,6 @@
 # BrutiFi 🔐
 
-> Modern desktop application for WPA/WPA2 security testing on macOS with real-time feedback
+> Modern desktop application for WiFi security testing (WPA/WPA2/WPA3/WPS) on macOS with real-time feedback
 
 [![Release](https://github.com/maxgfr/bruteforce-wifi/actions/workflows/release.yml/badge.svg)](https://github.com/maxgfr/bruteforce-wifi/releases)
 [![CI](https://github.com/maxgfr/bruteforce-wifi/actions/workflows/ci.yml/badge.svg)](https://github.com/maxgfr/bruteforce-wifi/actions)
@@ -9,7 +9,7 @@
 
 **⚠️ EDUCATIONAL USE ONLY - UNAUTHORIZED ACCESS IS ILLEGAL ⚠️**
 
-A high-performance macOS desktop GUI application for testing WPA/WPA2 password security through offline bruteforce attacks. Built with Rust and Iced, featuring dual cracking engines (Native CPU and Hashcat GPU) for maximum performance.
+A high-performance macOS desktop GUI application for testing WiFi password security through multiple attack vectors (WPA/WPA2 handshake, PMKID, WPA3-SAE, WPS, Evil Twin). Built with Rust and Iced, featuring dual cracking engines (Native CPU and Hashcat GPU) for maximum performance.
 
 ## ✨ Features
 
@@ -20,12 +20,25 @@ A high-performance macOS desktop GUI application for testing WPA/WPA2 password s
   - **Native CPU**: Custom PBKDF2 implementation with Rayon parallelism (~10K-100K passwords/sec)
   - **Hashcat GPU**: 10-100x faster acceleration with automatic device detection
 - 📡 **WiFi Network Scanning** - Real-time discovery with channel detection
-- 🎯 **Handshake Capture** - EAPOL frame analysis with visual progress indicators
+- 🎯 **Multi-Protocol Support** - WPA/WPA2, WPA3-SAE, PMKID, WPS attacks
 - 🔑 **Dual Attack Modes**:
   - 🔢 Numeric bruteforce (PIN codes: 8-12 digits)
   - 📋 Wordlist attacks (rockyou.txt, custom lists)
 - 📊 **Live Progress** - Real-time speed metrics, attempt counters, and ETA
 - 🔒 **100% Offline** - No data transmitted anywhere
+
+### Attack Methods
+
+| Method | Target | Description |
+|--------|--------|-------------|
+| **WPA/WPA2 Handshake** | EAPOL frames | Traditional 4-way handshake capture between client and AP, cracked offline |
+| **PMKID** | RSN IE | Clientless attack capturing PMKID from AP beacon frames (no clients needed) |
+| **Passive PMKID** | RSN IE | Continuous background sniffing that automatically captures PMKID from roaming clients |
+| **WPA3-SAE** | Dragonfly handshake | Modern WPA3 handshake capture with SAE (Simultaneous Authentication of Equals) |
+| **WPA3 Downgrade** | Transition mode | Forces WPA2 compatibility on WPA3/WPA2 mixed networks to enable standard attacks |
+| **WPS Pixie-Dust** | WPS PIN | Offline attack exploiting weak RNG in WPS implementations to recover PIN |
+| **WPS PIN Brute-force** | WPS protocol | Online attack testing PIN combinations directly against the AP's WPS daemon |
+| **Evil Twin** | Users | Rogue AP with captive portal capturing credentials from users connecting to fake network |
 
 ### Platform Support
 - 🍎 **macOS Native** - Apple Silicon and Intel support
@@ -63,8 +76,19 @@ cargo build --release
 
 ### Complete Workflow
 
+#### Standard Handshake Attack
 ```text
 1. Scan Networks → 2. Select Target → 3. Capture Handshake → 4. Crack Password
+```
+
+#### PMKID Attack (Clientless)
+```text
+1. Scan Networks → 2. Select Target → 3. Capture PMKID → 4. Crack Password
+```
+
+#### Evil Twin Attack
+```text
+1. Scan Networks → 2. Select Target → 3. Launch Evil Twin → 4. Capture Credentials
 ```
 
 ### Step 1: Scan for Networks
@@ -74,11 +98,21 @@ Launch the app and click "Scan Networks" to discover nearby WiFi networks:
 - **SSID** (network name)
 - **Channel number**
 - **Signal strength**
-- **Security type** (WPA/WPA2)
+- **Security type** (WPA/WPA2/WPA3)
+- **WPS support** (for WPS attacks)
 
-### Step 2: Select & Capture Handshake
+### Step 2: Select & Capture
 
-Select a network → Click "Continue to Capture"
+Select a network → Choose attack type → Click "Continue to Capture"
+
+**Available Capture Types:**
+
+| Type | Best For | Client Required |
+|------|----------|-----------------|
+| **4-Way Handshake** | Full password cracking | Yes |
+| **PMKID** | Clientless quick attack | No |
+| **Passive PMKID** | Background monitoring | No |
+| **WPA3-SAE** | Modern WPA3 networks | Yes |
 
 **Before capturing:**
 
@@ -91,7 +125,7 @@ Select a network → Click "Continue to Capture"
 
 Then click "Start Capture"
 
-The app monitors for the WPA/WPA2 4-way handshake:
+The app monitors for handshake frames:
 
 - ✅ **M1** - ANonce (from AP)
 - ✅ **M2** - SNonce + MIC (from client)
@@ -105,13 +139,23 @@ Navigate to "Crack" tab:
 
 #### Engine Selection
 
+**For Handshake/PMKID cracking:**
 - **Native CPU**: Software-only cracking, works everywhere
 - **Hashcat GPU**: Requires hashcat + hcxtools installed, 10-100x faster
 
+**For WPS attacks:**
+- **Pixie-Dust**: Works offline, instant recovery on vulnerable APs
+- **PIN Brute-force**: Online attack against WPS daemon
+
 #### Attack Methods
 
-- **Numeric Attack**: Tests PIN codes (e.g., 00000000-99999999)
-- **Wordlist Attack**: Tests passwords from files like rockyou.txt
+| Method | Target | Speed | Notes |
+|--------|--------|-------|-------|
+| **Wordlist Attack** | WPA/WPA2 hashes | Variable | Tests passwords from files like rockyou.txt |
+| **Numeric Attack** | PIN codes | ~10K-100K/sec | Tests 8-12 digit PIN codes |
+| **WPS Pixie-Dust** | WPS PIN | Instant | Offline attack exploiting weak RNG |
+| **WPS PIN Brute-force** | AP WPS daemon | ~1/sec | Online attack (may lock after attempts) |
+| **Evil Twin** | User credentials | N/A | Rogue AP with captive portal |
 
 #### Real-time Stats
 

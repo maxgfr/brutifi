@@ -81,7 +81,10 @@ fn test_attack_timeouts() {
 
 #[test]
 fn test_attack_type_display_names() {
-    assert_eq!(AutoAttackType::WpsPixieDust.display_name(), "WPS Pixie Dust");
+    assert_eq!(
+        AutoAttackType::WpsPixieDust.display_name(),
+        "WPS Pixie Dust"
+    );
     assert_eq!(
         AutoAttackType::Wpa3TransitionDowngrade.display_name(),
         "WPA3 Transition Downgrade"
