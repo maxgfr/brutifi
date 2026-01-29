@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use crate::screens::{CrackEngine, CrackMethod};
 use crate::workers::{CaptureProgress, CrackProgress, ScanResult};
+use brutifi::{AutoAttackProgress, AutoAttackType};
 
 /// Application messages
 #[derive(Debug, Clone)]
@@ -37,6 +38,13 @@ pub enum Message {
     #[allow(dead_code)]
     EnableAdminMode,
     ToggleDualInterface(bool),
+
+    // Auto Attack Mode
+    StartAutoAttack,
+    StopAutoAttack,
+    AutoAttackProgress(AutoAttackProgress),
+    CloseAutoAttackModal,
+    UpdateAttackElapsedTime(AutoAttackType),
 
     // Crack screen
     HandshakePathChanged(String),

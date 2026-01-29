@@ -6,6 +6,7 @@
  * 2. Crack - Bruteforce the password
  */
 
+pub mod components;
 pub mod crack;
 pub mod scan_capture;
 

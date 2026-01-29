@@ -1,4 +1,5 @@
 // Core library modules
+pub mod auto_attack;
 pub mod bruteforce;
 pub mod captive_portal;
 pub mod crypto;
@@ -15,6 +16,11 @@ pub mod wpa3;
 pub mod wps;
 
 // Re-exports
+pub use auto_attack::{
+    check_attack_dependencies, determine_attack_sequence, get_attack_timeout, AttackState,
+    AttackStatus, AttackType as AutoAttackType, AutoAttackConfig, AutoAttackFinalResult,
+    AutoAttackProgress, AutoAttackResult,
+};
 pub use bruteforce::OfflineBruteForcer;
 pub use crypto::{calculate_mic, calculate_pmk, calculate_ptk, verify_password};
 pub use dual_interface::{

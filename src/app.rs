@@ -19,7 +19,8 @@ use crate::persistence::{
 };
 use crate::screens::{CrackScreen, ScanCaptureScreen};
 use crate::theme::colors;
-use crate::workers::{self, CaptureState, CrackState};
+use crate::workers::{self, AutoAttackState, CaptureState, CrackState};
+use brutifi::AutoAttackProgress;
 
 /// Application screens
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -41,6 +42,11 @@ pub struct BruteforceApp {
     pub(crate) crack_state: Option<Arc<CrackState>>,
     pub(crate) crack_progress_rx:
         Option<tokio::sync::mpsc::UnboundedReceiver<workers::CrackProgress>>,
+    #[allow(dead_code)]
+    pub(crate) auto_attack_state: Option<Arc<AutoAttackState>>,
+    #[allow(dead_code)]
+    pub(crate) auto_attack_progress_rx:
+        Option<tokio::sync::mpsc::UnboundedReceiver<AutoAttackProgress>>,
 }
 
 impl BruteforceApp {
@@ -61,6 +67,8 @@ impl BruteforceApp {
             capture_progress_rx: None,
             crack_state: None,
             crack_progress_rx: None,
+            auto_attack_state: None,
+            auto_attack_progress_rx: None,
         };
 
         if let Some(persisted) = load_persisted_state() {
@@ -115,9 +123,12 @@ impl BruteforceApp {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        // Poll for capture and crack progress updates
+        // Poll for capture, crack, and auto attack progress updates
         // Reduced from 100ms to 50ms for more responsive UI while maintaining performance
-        if self.capture_progress_rx.is_some() || self.crack_progress_rx.is_some() {
+        if self.capture_progress_rx.is_some()
+            || self.crack_progress_rx.is_some()
+            || self.auto_attack_progress_rx.is_some()
+        {
             time::every(std::time::Duration::from_millis(50)).map(|_| Message::Tick)
         } else {
             Subscription::none()
@@ -151,6 +162,18 @@ impl BruteforceApp {
             Message::StopCapture => self.handle_stop_capture(),
             Message::CaptureProgress(progress) => self.handle_capture_progress(progress),
             Message::EnableAdminMode => self.handle_enable_admin_mode(),
+
+            // Auto Attack
+            Message::StartAutoAttack => self.handle_start_auto_attack(),
+            Message::StopAutoAttack => self.handle_stop_auto_attack(),
+            Message::AutoAttackProgress(progress) => self.handle_auto_attack_progress(progress),
+            Message::CloseAutoAttackModal => {
+                self.scan_capture_screen.auto_attack_modal_open = false;
+                Task::none()
+            }
+            Message::UpdateAttackElapsedTime(attack_type) => {
+                self.handle_update_attack_elapsed_time(attack_type)
+            }
 
             // Crack
             Message::HandshakePathChanged(path) => self.handle_handshake_path_changed(path),
