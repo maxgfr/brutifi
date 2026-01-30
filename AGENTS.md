@@ -28,10 +28,24 @@ src/
 │   └── security.rs      # Security utilities
 └── screens/
     ├── crack.rs         # Cracking UI + engine selector
-    └── scan_capture.rs # Scanning & capture UI
+    └── scan_capture.rs  # Scanning & capture UI
 ```
 
 ## Key Implementation Details
+
+### Two Attack Methods
+
+1. **4-Way Handshake** ([`src/core/network.rs`](src/core/network.rs))
+   - Captures M1 (ANonce) and M2 (SNonce + MIC) EAPOL frames
+   - Requires client device to reconnect to AP
+   - Traditional WPA/WPA2 attack method
+
+2. **PMKID** ([`src/core/network.rs`](src/core/network.rs))
+   - Extracts PMKID from RSN Information Element in beacon frames
+   - **Clientless**: No devices need to be connected
+   - Faster and stealthier than handshake capture
+
+Both methods produce a `.pcap` file that can be cracked offline.
 
 ### Native CPU Engine ([`src/core/bruteforce.rs`](src/core/bruteforce.rs))
 

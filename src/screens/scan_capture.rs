@@ -7,12 +7,11 @@
 
 use iced::widget::{
     button, checkbox, column, container, horizontal_rule, horizontal_space, pick_list, row,
-    scrollable, stack, text, Column,
+    scrollable, text, Column,
 };
 use iced::{Element, Length, Theme};
 
 use crate::messages::Message;
-use crate::screens::components;
 use crate::theme::{self, colors};
 use brutifi::WifiNetwork;
 
@@ -70,13 +69,6 @@ pub struct ScanCaptureScreen {
     // Dual interface support
     pub dual_interface_enabled: bool,
     pub secondary_interface: Option<String>,
-
-    // Auto Attack Mode
-    #[allow(dead_code)]
-    pub auto_attack_running: bool,
-    #[allow(dead_code)]
-    pub auto_attack_attacks: Vec<brutifi::AttackState>,
-    pub auto_attack_modal_open: bool,
 }
 
 impl Default for ScanCaptureScreen {
@@ -100,9 +92,6 @@ impl Default for ScanCaptureScreen {
             selected_channel: None,
             dual_interface_enabled: false,
             secondary_interface: None,
-            auto_attack_running: false,
-            auto_attack_attacks: Vec::new(),
-            auto_attack_modal_open: false,
         }
     }
 }
@@ -120,27 +109,14 @@ impl ScanCaptureScreen {
             .spacing(15)
             .height(Length::Fill);
 
-        let main_content = container(content.padding(20))
+        container(content.padding(20))
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_: &Theme| container::Style {
                 background: Some(iced::Background::Color(colors::BACKGROUND)),
                 ..Default::default()
-            });
-
-        // Wrap with modal overlay if auto attack is open
-        if self.auto_attack_modal_open {
-            stack![
-                main_content,
-                components::auto_attack_modal::view_modal(
-                    &self.auto_attack_attacks,
-                    self.auto_attack_running,
-                )
-            ]
+            })
             .into()
-        } else {
-            main_content.into()
-        }
     }
 
     fn view_network_list(&self) -> Element<'_, Message> {
@@ -270,12 +246,8 @@ impl ScanCaptureScreen {
                         "?"
                     };
 
-                    // Detect vulnerabilities based on security type
-                    let vulnerabilities: Vec<&str> = if network.security.contains("WPA3") {
-                        vec!["WPA3-SAE", "Dragonblood", "Downgrade"]
-                    } else if network.security.contains("WPA2") {
-                        vec!["PMKID", "Handshake", "WPS"]
-                    } else if network.security.contains("WPA") {
+                    // Detect attack methods based on security type
+                    let attack_methods: Vec<&str> = if network.security.contains("WPA") {
                         vec!["PMKID", "Handshake"]
                     } else if network.security.contains("None") {
                         vec!["Open"]
@@ -301,20 +273,20 @@ impl ScanCaptureScreen {
                                     text(format!("Ch {} | {}", network.channel, signal_icon))
                                         .size(10)
                                         .color(colors::TEXT_DIM),
-                                    if !vulnerabilities.is_empty() {
-                                        row(vulnerabilities
+                                    if !attack_methods.is_empty() {
+                                        row(attack_methods
                                             .iter()
-                                            .map(|v| {
-                                                container(text(*v).size(8))
+                                            .map(|method| {
+                                                container(text(*method).size(8))
                                                     .padding([2, 5])
                                                     .style(|_: &Theme| container::Style {
                                                         background: Some(iced::Background::Color(
                                                             iced::Color::from_rgba(
-                                                                0.86, 0.21, 0.27, 0.2,
+                                                                0.18, 0.55, 0.34, 0.2,
                                                             ),
                                                         )),
                                                         border: iced::Border {
-                                                            color: colors::DANGER,
+                                                            color: colors::PRIMARY,
                                                             width: 1.0,
                                                             radius: 3.0.into(),
                                                         },
@@ -639,15 +611,6 @@ impl ScanCaptureScreen {
                         .style(theme::primary_button_style)
                         .on_press(Message::GoToCrack)
                         .into(),
-                );
-                buttons_vec.push(
-                    button(
-                        row![text("🔄").size(14), text(" Test All Attacks").size(12)].spacing(3),
-                    )
-                    .padding([8, 16])
-                    .style(theme::secondary_button_style)
-                    .on_press(Message::StartAutoAttack)
-                    .into(),
                 );
                 buttons_vec.push(
                     button(text("Download pcap").size(12))
