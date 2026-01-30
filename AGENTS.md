@@ -105,10 +105,10 @@ cat src/core/hashcat.rs
 ### After Every Iteration
 
 ```bash
-# Format code
-cargo fmt --all
+# Format code (CI command - must pass)
+cargo fmt -- --check
 
-# Run clippy (must pass)
+# Run clippy (CI command - must pass with zero warnings)
 cargo clippy --all-targets --all-features -- -D warnings
 
 # Build release
@@ -175,11 +175,16 @@ sudo ./target/release/brutifi
 ### Essential Commands
 
 ```bash
-# Format + Lint + Build (all-in-one)
-cargo fmt --all && cargo clippy --all-targets --all-features -- -D warnings && cargo build --release
+# CI Commands (exactly as CI runs them)
+cargo fmt -- --check                                    # Format check
+cargo clippy --all-targets --all-features -- -D warnings # Lint (zero warnings)
+cargo build --verbose                                    # Build
+cargo test --verbose                                     # Test
 
-# Run tests
-cargo test
+# Development Commands
+cargo fmt --all                                          # Auto-format code
+cargo clippy --all-targets --all-features -- -D warnings # Check for warnings
+cargo build --release                                    # Release build
 
 # Run app
 sudo ./target/release/brutifi
@@ -211,11 +216,16 @@ When in doubt:
 
 ---
 
-**Remember**: After every code change, always run:
+**Remember**: After every code change, always run these **exact CI commands**:
 
 ```bash
-cargo fmt --all
-cargo clippy --all-targets --all-features -- -D warnings
+cargo fmt -- --check                                    # Check formatting (CI exact)
+cargo clippy --all-targets --all-features -- -D warnings # Check lints (CI exact)
 ```
 
-These checks are enforced by CI and must pass before merging.
+If formatting fails, auto-fix with:
+```bash
+cargo fmt --all
+```
+
+These checks are **enforced by CI** and must pass before merging.

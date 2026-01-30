@@ -397,10 +397,9 @@ fn build_handshake_from_eapol(
 ) -> Result<Handshake> {
     // First, try to find PMKID (client-less attack, faster and more reliable)
     for packet in packets {
-        if packet.message_type == 1 && packet.pmkid.is_some() {
+        if let (1, Some(pmkid)) = (packet.message_type, packet.pmkid) {
             let ap_mac = packet.ap_mac;
             let client_mac = packet.client_mac;
-            let pmkid = packet.pmkid.unwrap();
 
             // Determine SSID
             let ssid_str = if let Some(s) = ssid {

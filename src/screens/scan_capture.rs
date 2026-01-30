@@ -250,22 +250,24 @@ impl ScanCaptureScreen {
                                         row(attack_methods
                                             .iter()
                                             .map(|method| {
-                                                container(text(*method).size(8))
-                                                    .padding([2, 5])
-                                                    .style(|_: &Theme| container::Style {
-                                                        background: Some(iced::Background::Color(
-                                                            iced::Color::from_rgba(
-                                                                0.18, 0.55, 0.34, 0.2,
-                                                            ),
-                                                        )),
-                                                        border: iced::Border {
-                                                            color: colors::PRIMARY,
-                                                            width: 1.0,
-                                                            radius: 3.0.into(),
-                                                        },
-                                                        ..Default::default()
-                                                    })
-                                                    .into()
+                                                container(
+                                                    text(*method).size(8).color(iced::Color::WHITE),
+                                                )
+                                                .padding([2, 5])
+                                                .style(|_: &Theme| container::Style {
+                                                    background: Some(iced::Background::Color(
+                                                        iced::Color::from_rgba(
+                                                            0.18, 0.55, 0.34, 0.2,
+                                                        ),
+                                                    )),
+                                                    border: iced::Border {
+                                                        color: colors::PRIMARY,
+                                                        width: 1.0,
+                                                        radius: 3.0.into(),
+                                                    },
+                                                    ..Default::default()
+                                                })
+                                                .into()
                                             })
                                             .collect::<Vec<Element<Message>>>())
                                         .spacing(3)
