@@ -138,7 +138,6 @@ impl BruteforceApp {
             Message::SelectNetwork(idx) => self.handle_select_network(idx),
             Message::SelectChannel(channel) => self.handle_select_channel(channel),
             Message::InterfaceSelected(interface) => self.handle_interface_selected(interface),
-            Message::ToggleDualInterface(enabled) => self.handle_toggle_dual_interface(enabled),
 
             // Capture
             Message::BrowseCaptureFile => self.handle_browse_capture_file(),

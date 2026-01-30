@@ -36,7 +36,6 @@ pub enum Message {
     CaptureProgress(CaptureProgress),
     #[allow(dead_code)]
     EnableAdminMode,
-    ToggleDualInterface(bool),
 
     // Crack screen
     HandshakePathChanged(String),

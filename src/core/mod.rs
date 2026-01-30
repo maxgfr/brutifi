@@ -1,7 +1,6 @@
 // Core library modules
 pub mod bruteforce;
 pub mod crypto;
-pub mod dual_interface;
 pub mod handshake;
 pub mod hashcat;
 pub mod network;
@@ -13,10 +12,6 @@ pub mod session;
 // Re-exports
 pub use bruteforce::OfflineBruteForcer;
 pub use crypto::{calculate_mic, calculate_pmk, calculate_ptk, verify_password};
-pub use dual_interface::{
-    auto_assign_interfaces, detect_interface_capabilities, validate_manual_assignment,
-    DualInterfaceConfig, InterfaceAssignment, InterfaceCapabilities,
-};
 pub use handshake::{extract_eapol_from_packet, parse_cap_file, EapolPacket, Handshake};
 pub use hashcat::{
     are_external_tools_available, convert_to_hashcat_format, crack_with_hashcat, HashcatParams,

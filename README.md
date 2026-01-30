@@ -139,6 +139,19 @@ brew install hashcat hcxtools
 
 **Unauthorized access is a criminal offense.** Always obtain explicit written permission.
 
+## 🔧 Alternatives
+
+**Looking for more advanced features?**
+
+BrutiFi focuses on **simplicity** with just 2 core attacks (PMKID + Handshake). For a more comprehensive WiFi auditing tool with additional attack vectors, check out:
+
+- **[Wifite2](https://github.com/kimocoder/wifite2)** - Complete automated wireless auditing tool
+  - WPS attacks (Pixie Dust, PIN brute-force)
+  - WPA3 attacks (Transition downgrade, SAE)
+  - Evil Twin phishing
+  - Multiple attack automation
+  - Linux-focused CLI tool
+
 ## 🙏 Acknowledgments
 
 Inspired by:
