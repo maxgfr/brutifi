@@ -20,11 +20,22 @@ use brutifi::WifiNetwork;
 pub struct HandshakeProgress {
     pub m1_received: bool,
     pub m2_received: bool,
+    pub pmkid_captured: bool,
 }
 
 impl HandshakeProgress {
     pub fn is_complete(&self) -> bool {
-        self.m1_received && self.m2_received
+        self.pmkid_captured || (self.m1_received && self.m2_received)
+    }
+
+    pub fn capture_type(&self) -> &str {
+        if self.pmkid_captured {
+            "PMKID (client-less)"
+        } else if self.m1_received && self.m2_received {
+            "4-way handshake"
+        } else {
+            "In progress"
+        }
     }
 }
 
@@ -208,6 +219,15 @@ impl ScanCaptureScreen {
                         "?"
                     };
 
+                    // Detect attack methods based on security type
+                    let attack_methods: Vec<&str> = if network.security.contains("WPA") {
+                        vec!["PMKID", "Handshake"]
+                    } else if network.security.contains("None") {
+                        vec!["Open"]
+                    } else {
+                        vec![]
+                    };
+
                     let item_style = if is_selected {
                         theme::network_item_selected_style
                     } else {
@@ -226,8 +246,36 @@ impl ScanCaptureScreen {
                                     text(format!("Ch {} | {}", network.channel, signal_icon))
                                         .size(10)
                                         .color(colors::TEXT_DIM),
+                                    if !attack_methods.is_empty() {
+                                        row(attack_methods
+                                            .iter()
+                                            .map(|method| {
+                                                container(
+                                                    text(*method).size(8).color(iced::Color::WHITE),
+                                                )
+                                                .padding([2, 5])
+                                                .style(|_: &Theme| container::Style {
+                                                    background: Some(iced::Background::Color(
+                                                        iced::Color::from_rgba(
+                                                            0.18, 0.55, 0.34, 0.2,
+                                                        ),
+                                                    )),
+                                                    border: iced::Border {
+                                                        color: colors::PRIMARY,
+                                                        width: 1.0,
+                                                        radius: 3.0.into(),
+                                                    },
+                                                    ..Default::default()
+                                                })
+                                                .into()
+                                            })
+                                            .collect::<Vec<Element<Message>>>())
+                                        .spacing(3)
+                                    } else {
+                                        row![].spacing(0)
+                                    },
                                 ]
-                                .spacing(2),
+                                .spacing(3),
                                 horizontal_space(),
                                 text(network.security.clone())
                                     .size(10)
@@ -385,15 +433,19 @@ impl ScanCaptureScreen {
         // ========== STATUS BLOCK ==========
         let status_block: Element<'_, Message> = if handshake_done {
             // Success state
+            let capture_type = self.handshake_progress.capture_type();
             container(
                 column![
                     row![
                         text("✅").size(20),
-                        text("Handshake Captured!").size(14).color(colors::SUCCESS),
+                        text("Capture Complete!").size(14).color(colors::SUCCESS),
                     ]
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
-                    text("The capture file contains a valid WPA handshake.")
+                    text(format!("Type: {}", capture_type))
+                        .size(11)
+                        .color(colors::PRIMARY),
+                    text("The capture file is ready for cracking.")
                         .size(10)
                         .color(colors::TEXT_DIM),
                 ]
@@ -420,24 +472,33 @@ impl ScanCaptureScreen {
                 column![
                     row![
                         text("🔍").size(14),
-                        text("Listening for handshake...")
+                        text("Listening for capture...")
                             .size(12)
                             .color(colors::TEXT),
                     ]
                     .spacing(6),
-                    row![
-                        if hp.m1_received {
-                            text("✅ M1").size(10).color(colors::SUCCESS)
-                        } else {
-                            text("⏳ M1").size(10).color(colors::TEXT_DIM)
-                        },
-                        if hp.m2_received {
-                            text("✅ M2").size(10).color(colors::SUCCESS)
-                        } else {
-                            text("⏳ M2").size(10).color(colors::TEXT_DIM)
-                        },
-                    ]
-                    .spacing(12),
+                    if hp.pmkid_captured {
+                        row![text("✅ PMKID (client-less)")
+                            .size(10)
+                            .color(colors::SUCCESS),]
+                        .spacing(12)
+                    } else {
+                        row![
+                            text("⏳ PMKID").size(10).color(colors::TEXT_DIM),
+                            text("or").size(9).color(colors::TEXT_DIM),
+                            if hp.m1_received {
+                                text("✅ M1").size(10).color(colors::SUCCESS)
+                            } else {
+                                text("⏳ M1").size(10).color(colors::TEXT_DIM)
+                            },
+                            if hp.m2_received {
+                                text("✅ M2").size(10).color(colors::SUCCESS)
+                            } else {
+                                text("⏳ M2").size(10).color(colors::TEXT_DIM)
+                            },
+                        ]
+                        .spacing(12)
+                    },
                 ]
                 .spacing(6),
             )

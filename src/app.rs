@@ -168,7 +168,6 @@ impl BruteforceApp {
             Message::CopyPassword => self.handle_copy_password(),
 
             // General
-            Message::ReturnToNormalMode => self.handle_return_to_normal_mode(),
             Message::Tick => self.handle_tick(),
         }
     }
@@ -204,7 +203,7 @@ impl BruteforceApp {
             None
         };
 
-        // Navigation header - simplified to 2 steps
+        // Navigation header - 2 tabs
         let nav = container(
             row![
                 nav_button("1. Scan & Capture", Screen::ScanCapture, self.screen),

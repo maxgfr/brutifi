@@ -2,7 +2,7 @@
  * GUI Screens
  *
  * Each screen represents a step in the WiFi cracking workflow:
- * 1. Scan & Capture - Discover networks and capture handshake (unified)
+ * 1. Scan & Capture - Scan networks and capture handshake/PMKID
  * 2. Crack - Bruteforce the password
  */
 

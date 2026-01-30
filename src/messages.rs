@@ -11,6 +11,7 @@ use crate::workers::{CaptureProgress, CrackProgress, ScanResult};
 
 /// Application messages
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Message {
     // Navigation
     GoToScanCapture,
@@ -51,8 +52,6 @@ pub enum Message {
     StopCrack,
     CrackProgress(CrackProgress),
     CopyPassword,
-    #[allow(dead_code)]
-    ReturnToNormalMode,
 
     // General
     Tick,

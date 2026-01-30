@@ -190,7 +190,18 @@ fn parse_cracked_password(line: &str) -> Option<String> {
         return None;
     }
 
-    // WPA 22000 format: WPA*02*...:password
+    // WPA 22000 format PMKID: WPA*01*...:password
+    if trimmed.starts_with("WPA*01*") && trimmed.contains(':') {
+        if let Some(password) = trimmed.split(':').next_back() {
+            let password = password.trim();
+            if password.len() >= 8 && password.len() <= 63 && !password.contains('*') {
+                return Some(password.to_string());
+            }
+        }
+        return None;
+    }
+
+    // WPA 22000 format handshake: WPA*02*...:password
     if trimmed.starts_with("WPA*02*") && trimmed.contains(':') {
         if let Some(password) = trimmed.split(':').next_back() {
             let password = password.trim();

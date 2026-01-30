@@ -241,14 +241,32 @@ impl BruteforceApp {
     pub fn handle_capture_progress(&mut self, progress: CaptureProgress) -> Task<Message> {
         match progress {
             CaptureProgress::Log(msg) => {
+                // Detect PMKID from log messages
+                if msg.contains("PMKID FOUND") || msg.contains("🎯 PMKID") {
+                    self.scan_capture_screen.handshake_progress.pmkid_captured = true;
+                }
+                // Detect traditional handshake messages
+                if msg.contains("M1 (ANonce)") || msg.contains("🔑 M1") {
+                    self.scan_capture_screen.handshake_progress.m1_received = true;
+                }
+                if msg.contains("M2 (SNonce+MIC)") || msg.contains("🔐 M2") {
+                    self.scan_capture_screen.handshake_progress.m2_received = true;
+                }
                 self.add_capture_log(msg);
             }
             CaptureProgress::HandshakeComplete { ssid } => {
                 self.scan_capture_screen.handshake_complete = true;
-                self.scan_capture_screen.handshake_progress.m1_received = true;
-                self.scan_capture_screen.handshake_progress.m2_received = true;
+                // Don't override specific flags, just mark as complete
+                // The specific type (PMKID vs handshake) is already set by Log messages
+                if !self.scan_capture_screen.handshake_progress.pmkid_captured {
+                    // If no PMKID was detected, assume traditional handshake
+                    self.scan_capture_screen.handshake_progress.m1_received = true;
+                    self.scan_capture_screen.handshake_progress.m2_received = true;
+                }
                 self.scan_capture_screen.is_capturing = false;
-                self.add_capture_log(format!("✅ Handshake captured for '{}'", ssid));
+
+                let capture_type = self.scan_capture_screen.handshake_progress.capture_type();
+                self.add_capture_log(format!("✅ {} captured for '{}'", capture_type, ssid));
                 self.persist_state();
 
                 if self.is_root {
