@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0](https://github.com/maxgfr/brutifi/compare/v1.14.2...v2.0.0) (2026-01-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove auto-attack
+
+### ✨ Features
+
+* add captive portal templates and server module (Sprint 3) ([7b2d8e5](https://github.com/maxgfr/brutifi/commit/7b2d8e528a0968d49503e951f6180a382f36e81c))
+* Add integration tests for scan workflow and security methods ([d2dec76](https://github.com/maxgfr/brutifi/commit/d2dec769bd2f9aad22cfe27e4f6db4375b20589f))
+* add PMKID support for client-less attacks and enhance capture progress tracking ([00a1637](https://github.com/maxgfr/brutifi/commit/00a16377faaadfae86d3b977792b45ef0fdee526))
+* implement Evil Twin core module (Sprint 3 - WIP) ([198d803](https://github.com/maxgfr/brutifi/commit/198d803d6645ebc878c65a228d91d678439f66c8))
+* implement WPA3-SAE support (Sprint 2) ([30c2a6e](https://github.com/maxgfr/brutifi/commit/30c2a6e9ab9a4418cc0534954b75081557fb6262))
+* implement WPS attacks (Pixie-Dust and PIN brute-force) ([b3af419](https://github.com/maxgfr/brutifi/commit/b3af419f6938308519072467948904d5397b8a08))
+* remove auto-attack ([f174478](https://github.com/maxgfr/brutifi/commit/f174478b5c25dc0572693b9f63daff1d7fcc3fe6))
+
+
+### 🐛 Bug Fixes
+
+* Remove outdated HTML templates for various router brands (Linksys, NETGEAR, TP-LINK, Generic) to streamline codebase and improve maintainability. ([9f48957](https://github.com/maxgfr/brutifi/commit/9f489572c224ad04b101a5e99a1c0c282c0cccba))
+* Update display name formatting for WPS Pixie Dust attack type ([9a26f35](https://github.com/maxgfr/brutifi/commit/9a26f359bc509b64e97fc2b3c53f848ac01c65e5))
+
+
+### 📝 Documentation
+
+* update README with WPA3-SAE features ([a3a4e63](https://github.com/maxgfr/brutifi/commit/a3a4e6304ab36a4f9e70a5fc74e2caee98878c03))
+
+
+### ♻️ Code Refactoring
+
+* Update CI commands in AGENTS.md for clarity and consistency; improve code formatting checks ([a1b0def](https://github.com/maxgfr/brutifi/commit/a1b0defabdcc2426debb36a11338a592e9c3916e))
+
 ## [1.14.2](https://github.com/maxgfr/brutifi/compare/v1.14.1...v1.14.2) (2026-01-25)
 
 
